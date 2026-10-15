@@ -1,0 +1,67 @@
+[project]
+name = "pytest-verifies"
+version = "1.0.0"
+description = "Enterprise requirements traceability plugin for pytest"
+readme = "README.md"
+authors = [
+    { name = "Dale Collison", email = "dale.a.collison@gmail.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "pytest>=7.0",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Framework :: Pytest",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+[project.entry-points.pytest11]
+verifies = "pytest_verifies.plugin"
+
+[project.scripts]
+pytest-verifies = "pytest_verifies.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest-xdist>=3.0",
+    "pyyaml>=6.0",
+    "ruff",
+    "mypy",
+    "pre-commit>=4.6.2",
+    "pre-commit-uv>=4.3.0",
+]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.7",
+    "mkdocstrings[python]>=1.0.6",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501", "W293"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = false
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
