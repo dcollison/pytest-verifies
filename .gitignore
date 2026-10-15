@@ -15,3 +15,8 @@ wheels/
 .ruff_cache/
 .verifies/
 *.jsonl
+
+# Documentation & coverage builds
+site/
+.coverage
+htmlcov/

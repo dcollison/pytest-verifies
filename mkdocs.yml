@@ -1,0 +1,72 @@
+site_name: pytest-verifies
+site_description: Enterprise requirements traceability plugin for pytest
+site_author: Dale Collison
+site_url: https://dcollison.github.io/pytest-verifies/
+repo_url: https://github.com/dcollison/pytest-verifies
+repo_name: dcollison/pytest-verifies
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: en
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_source: true
+
+nav:
+  - Overview: index.md
+  - Getting Started: getting-started.md
+  - User Guide:
+      - Assertions & Context: guide/assertions.md
+      - Baseline Manifests: guide/baselines.md
+      - Multi-Run Shard Consolidation: guide/consolidation.md
+      - Reports & Quality Gates: guide/reports.md
+  - API Reference: reference.md
+  - Standards Compliance: compliance.md
