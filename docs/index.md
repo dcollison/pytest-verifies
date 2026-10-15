@@ -23,10 +23,12 @@
 ```python
 from pytest_verifies import verifies
 
+
 @verifies("REQ-PWR-001", description="Nominal voltage within 5.0 V +/- 2%")
 def test_voltage():
     measured_v = 5.02
     assert 4.90 <= measured_v <= 5.10
+
 
 def test_telemetry():
     with verifies("REQ-PWR-002", soft=True, evidence={"limit_a": 1.5}) as ctx:

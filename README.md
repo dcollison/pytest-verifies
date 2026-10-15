@@ -55,6 +55,7 @@ Decorate test functions or classes to associate them with one or more requiremen
 ```python
 from pytest_verifies import verifies
 
+
 @verifies("REQ-PWR-001", "REQ-PWR-002", description="Power rail voltage tolerance")
 def test_voltage_limits():
     measured_v = 5.01
@@ -68,9 +69,11 @@ Verify fine-grained inline statements while preserving full assertion diffs:
 ```python
 from pytest_verifies import verifies
 
+
 def test_network_packet():
     packet = {"protocol": "TCP", "port": 443}
-    with verifies("REQ-NET-010"): assert packet["port"] == 443
+    with verifies("REQ-NET-010"):
+        assert packet["port"] == 443
 ```
 
 ### 3.3 Soft Assertions & Objective Evidence
@@ -79,6 +82,7 @@ Evaluate multiple requirements within a single test execution without early term
 
 ```python
 from pytest_verifies import verifies
+
 
 def test_environmental_limits():
     ambient_temp_c = 72.4
@@ -107,6 +111,7 @@ Attach requirement tags to specific test parameters:
 ```python
 import pytest
 from pytest_verifies import verifies
+
 
 @pytest.mark.parametrize(
     "baud_rate",

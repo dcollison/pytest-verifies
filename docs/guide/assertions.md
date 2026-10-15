@@ -13,6 +13,7 @@ Use `@verifies(...)` on test functions or test classes:
 ```python
 from pytest_verifies import verifies
 
+
 @verifies("REQ-SYS-001", "REQ-SYS-002", description="Subsystem boot sequence")
 def test_subsystem_boot():
     assert True
@@ -39,9 +40,11 @@ Use `with verifies(...)` for statement-level or multi-block verification:
 ```python
 from pytest_verifies import verifies
 
+
 def test_packet_flow():
     # Single-line check
-    with verifies("REQ-NET-001"): assert 1 == 1
+    with verifies("REQ-NET-001"):
+        assert 1 == 1
 
     # Multi-statement block
     with verifies("REQ-NET-002", description="Payload checksum validation"):
@@ -60,6 +63,7 @@ Enable soft assertions per block with `soft=True`, or globally across all blocks
 
 ```python
 from pytest_verifies import verifies
+
 
 def test_safety_envelope():
     # Block 1 fails softly; execution continues!
@@ -81,6 +85,7 @@ Audit frameworks require verifiable proof of test outcomes. Objective evidence c
 
 ```python
 from pytest_verifies import verifies
+
 
 def test_sensor_telemetry():
     # Static evidence dictionary

@@ -46,10 +46,12 @@ In `tests/test_power.py`:
 ```python
 from pytest_verifies import verifies
 
+
 @verifies("REQ-PWR-001")
 def test_power_rail():
     voltage = 5.0
     assert voltage == 5.0
+
 
 def test_thermal_guard():
     with verifies("REQ-SAF-001"):
