@@ -10,6 +10,10 @@ Technical documentation and docstrings for public callables and domain models.
     options:
       show_root_heading: true
 
+::: pytest_verifies.context.step
+    options:
+      show_root_heading: true
+
 ---
 
 ## Domain Models

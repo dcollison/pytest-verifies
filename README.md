@@ -124,6 +124,31 @@ def test_serial_baud(baud_rate):
     assert baud_rate in (9600, 115200)
 ```
 
+### 3.5 Test Procedure Steps & Action Steps
+
+Formal test protocols often require tracking discrete step IDs (`STEP-01`, `1.1`), including pure **Action Steps** (stimulus/setup) and **Verification Steps** (checking requirements):
+
+```python
+from pytest_verifies import step, verifies
+
+
+def test_motor_speed_control():
+    # Action step: Setup stimulus without validating a requirement
+    with step("STEP-01", description="Power on inverter and spin motor"):
+        inverter.power_on()
+        motor.set_target_rpm(3000)
+
+    # Verification step: Directly validates REQ-MOT-001
+    with step(
+        "STEP-02", description="Verify steady-state RPM within +/- 1%", verifies="REQ-MOT-001"
+    ):
+        assert 2970 <= motor.measured_rpm <= 3030
+
+    # Verification step with verifies(..., step=...)
+    with verifies("REQ-MOT-002", step="STEP-03", description="Verify current draw under load"):
+        assert motor.current_draw_a < 15.0
+```
+
 ---
 
 ## 4. Pytest Command-Line & Configuration Options

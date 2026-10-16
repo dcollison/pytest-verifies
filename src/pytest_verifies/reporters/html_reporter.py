@@ -87,8 +87,13 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
             )
             for r in req.records:
                 dur = f"{r.duration_s:.4f}s"
+                step_badge = (
+                    f' <span class="badge badge-step">Step: {html.escape(r.step_id)}</span>'
+                    if r.step_id
+                    else ""
+                )
                 details_html.append(
-                    f'<li><code>{html.escape(r.nodeid)}</code> <span class="badge badge-{r.status.lower()}">{r.status}</span> '
+                    f'<li><code>{html.escape(r.nodeid)}</code>{step_badge} <span class="badge badge-{r.status.lower()}">{r.status}</span> '
                     f"at <code>{html.escape(r.location)}</code> ({dur})</li>"
                 )
             details_html.append("</ul></div>")
@@ -119,6 +124,56 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
         """)
 
     table_rows = "".join(rows_html)
+
+    action_records = [r for r in report.test_records if r.is_action]
+    action_section_html = ""
+    if action_records:
+        action_rows = []
+        for ar in action_records:
+            ev_html = ""
+            if ar.evidence:
+                ev_json = json.dumps(ar.evidence, indent=2)
+                ev_html = f'<details><summary>Evidence</summary><pre class="code-box evidence-box">{html.escape(ev_json)}</pre></details>'
+            elif ar.message:
+                ev_html = f'<pre class="code-box failure-box">{html.escape(ar.message)}</pre>'
+            else:
+                ev_html = "—"
+
+            action_rows.append(f"""
+            <tr>
+              <td><code>{html.escape(ar.step_id or "")}</code></td>
+              <td><code>{html.escape(ar.nodeid)}</code></td>
+              <td><span class="badge badge-{ar.status.lower()}">{ar.status}</span></td>
+              <td>{html.escape(ar.description or "") or "—"}</td>
+              <td>{ar.duration_s:.4f}s</td>
+              <td>{ev_html}</td>
+            </tr>
+            """)
+
+        action_section_html = f"""
+        <div style="margin-top: 2rem;">
+          <h2 style="font-size: 1.1rem; font-weight: 600; color: var(--text); margin-bottom: 0.75rem;">
+            Test Procedure Action Steps
+          </h2>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Step ID</th>
+                  <th>Test</th>
+                  <th>Status</th>
+                  <th>Description</th>
+                  <th>Duration</th>
+                  <th>Evidence / Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {"".join(action_rows)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        """
 
     document = f"""<!DOCTYPE html>
 <html lang="en-GB">
@@ -258,6 +313,7 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
     .badge-partial {{ background: var(--amber-bg); color: var(--amber); }}
     .badge-unverified, .badge-skipped {{ background: var(--gray-bg); color: var(--text-muted); }}
     .badge-orphan {{ background: var(--amber-bg); color: var(--amber); margin-left: 0.25rem; }}
+    .badge-step {{ background: rgba(56, 189, 248, 0.15); color: var(--primary); margin-left: 0.25rem; font-family: ui-monospace, monospace; }}
     .badge-xpass {{ background: var(--green-bg); color: var(--green); }}
 
     .stage-tag {{
@@ -367,6 +423,7 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
         </tbody>
       </table>
     </div>
+    {action_section_html}
   </div>
 
   <script>

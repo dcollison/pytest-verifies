@@ -252,6 +252,7 @@ def consolidate_requirements(
         verified_by_tests: list[str] = sorted(
             {r.nodeid for r in req_records if r.status in ("PASSED", "XPASS")}
         )
+        steps_list: list[str] = sorted({r.step_id for r in req_records if r.step_id})
         evidence_list: list[Any] = [r.evidence for r in req_records if r.evidence is not None]
         failure_messages: list[str] = [
             r.message
@@ -268,6 +269,7 @@ def consolidate_requirements(
             is_orphan=is_orphan,
             status=status,
             stages_verified=stages_verified,
+            steps=steps_list,
             records=req_records,
             verified_by_tests=verified_by_tests,
             evidence=evidence_list,
@@ -296,5 +298,6 @@ def consolidate_requirements(
         orphan_count=orphan_count,
         coverage_percentage=coverage_percentage,
         requirements=consolidated_list,
+        test_records=list(records),
         runs=runs or [],
     )

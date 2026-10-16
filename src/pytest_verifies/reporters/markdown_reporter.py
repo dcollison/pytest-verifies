@@ -85,13 +85,15 @@ def generate_markdown_report(report: RTMReport, output_path: str | Path | None =
     lines.append("")
 
     # Evidence and Failure Details Section
-    has_details = any(req.failure_messages or req.evidence for req in report.requirements)
+    has_details = any(
+        req.failure_messages or req.evidence or req.records for req in report.requirements
+    )
     if has_details:
         lines.append("## Verification Details & Objective Evidence")
         lines.append("")
 
         for req in report.requirements:
-            if not req.failure_messages and not req.evidence:
+            if not req.failure_messages and not req.evidence and not req.records:
                 continue
 
             lines.append("<details>")
@@ -122,13 +124,27 @@ def generate_markdown_report(report: RTMReport, output_path: str | Path | None =
             if req.records:
                 lines.append("#### Test Locations:")
                 for r in req.records:
+                    step_str = f" [Step: `{r.step_id}`]" if r.step_id else ""
                     lines.append(
-                        f"- `{r.nodeid}` [{r.status}] at `{r.location}` ({r.duration_s:.4f}s)"
+                        f"- `{r.nodeid}`{step_str} [{r.status}] at `{r.location}` ({r.duration_s:.4f}s)"
                     )
                 lines.append("")
 
             lines.append("</details>")
             lines.append("")
+
+    action_records = [r for r in report.test_records if r.is_action]
+    if action_records:
+        lines.append("## Test Procedure Action Steps")
+        lines.append("")
+        lines.append("| Step ID | Test | Status | Description | Duration |")
+        lines.append("| :--- | :--- | :--- | :--- | :--- |")
+        for ar in action_records:
+            desc = ar.description or "—"
+            lines.append(
+                f"| `{ar.step_id}` | `{ar.nodeid}` | {ar.status} | {desc} | {ar.duration_s:.4f}s |"
+            )
+        lines.append("")
 
     content = "\n".join(lines) + "\n"
     if output_path:
