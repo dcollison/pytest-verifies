@@ -34,6 +34,7 @@ def generate_csv_report(report: RTMReport, output_path: str | Path | None = None
             "status",
             "in_baseline",
             "stages",
+            "steps",
             "verified_by_tests",
             "evidence",
             "failure_messages",
@@ -44,6 +45,7 @@ def generate_csv_report(report: RTMReport, output_path: str | Path | None = None
         stages_str = "; ".join(
             f"{stage}:{status}" for stage, status in sorted(req.stages_verified.items())
         )
+        steps_str = "; ".join(req.steps)
         tests_str = "; ".join(req.verified_by_tests)
         evidence_str = json.dumps(req.evidence) if req.evidence else ""
         failures_str = " | ".join(
@@ -57,6 +59,7 @@ def generate_csv_report(report: RTMReport, output_path: str | Path | None = None
                 req.status,
                 "TRUE" if req.in_baseline else "FALSE",
                 stages_str,
+                steps_str,
                 tests_str,
                 evidence_str,
                 failures_str,

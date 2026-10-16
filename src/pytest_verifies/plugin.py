@@ -159,8 +159,9 @@ def extract_requirements_from_item(item: pytest.Item) -> set[str]:
                                 func_name = expr.func.id
                             elif isinstance(expr.func, ast.Attribute):
                                 func_name = expr.func.attr
-                            if func_name == "verifies":
-                                for arg in expr.args:
+                            if func_name in ("verifies", "step"):
+                                args_to_check = expr.args[1:] if func_name == "step" else expr.args
+                                for arg in args_to_check:
                                     if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
                                         val = arg.value.strip()
                                         if val:
@@ -174,13 +175,21 @@ def extract_requirements_from_item(item: pytest.Item) -> set[str]:
                                                 if val:
                                                     extracted.add(val)
                                 for kw in expr.keywords:
-                                    if kw.arg in ("req_id", "req_ids"):
+                                    if kw.arg in ("req_id", "req_ids", "verifies"):
                                         if isinstance(kw.value, ast.Constant) and isinstance(
                                             kw.value.value, str
                                         ):
                                             val = kw.value.value.strip()
                                             if val:
                                                 extracted.add(val)
+                                        elif isinstance(kw.value, (ast.List, ast.Tuple)):
+                                            for elt in kw.value.elts:
+                                                if isinstance(elt, ast.Constant) and isinstance(
+                                                    elt.value, str
+                                                ):
+                                                    val = elt.value.strip()
+                                                    if val:
+                                                        extracted.add(val)
         except (OSError, TypeError, SyntaxError):
             pass
 
@@ -370,7 +379,8 @@ def pytest_configure(config: pytest.Config) -> None:
     """Register custom marker, load baseline manifest, and register controller listener."""
     config.addinivalue_line(
         "markers",
-        "verifies(*req_ids, description=None, evidence=None): Link test to formal engineering requirements.",
+        "verifies(*req_ids, step=None, step_id=None, description=None, evidence=None): "
+        "Link test to formal engineering requirements or procedure steps.",
     )
 
     baseline_map: dict[str, BaselineRequirement] | None = None
@@ -524,38 +534,56 @@ def pytest_runtest_makereport(
 
         desc = marker.kwargs.get("description")
         ev = marker.kwargs.get("evidence")
+        step_id = marker.kwargs.get("step_id") or marker.kwargs.get("step")
+
+        if hasattr(report, "wasxfail"):
+            if report.skipped:
+                m_status = "XFAILED"
+            elif report.passed:
+                m_status = "XPASS"
+            else:
+                m_status = "FAILED"
+        elif report.passed:
+            m_status = "PASSED"
+        elif report.failed:
+            m_status = "FAILED"
+        elif report.skipped:
+            m_status = "SKIPPED"
+        else:
+            m_status = "ERROR"
+
+        msg = None
+        if m_status in ("FAILED", "ERROR", "XFAILED"):
+            msg = getattr(report, "longreprtext", None) or (
+                str(report.longrepr) if report.longrepr else None
+            )
+
+        if not marker_req_ids and step_id:
+            m_record = VerificationRecord(
+                nodeid=item.nodeid,
+                req_ids=[],
+                status=m_status,
+                stage=stage,
+                step_id=step_id,
+                location=loc,
+                description=desc,
+                message=msg,
+                evidence=ev,
+                duration_s=getattr(report, "duration", 0.0),
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
+            records.append(m_record)
 
         for req_id in marker_req_ids:
             if report.passed and req_id in evaluated_req_ids:
                 continue
-
-            if hasattr(report, "wasxfail"):
-                if report.skipped:
-                    m_status = "XFAILED"
-                elif report.passed:
-                    m_status = "XPASS"
-                else:
-                    m_status = "FAILED"
-            elif report.passed:
-                m_status = "PASSED"
-            elif report.failed:
-                m_status = "FAILED"
-            elif report.skipped:
-                m_status = "SKIPPED"
-            else:
-                m_status = "ERROR"
-
-            msg = None
-            if m_status in ("FAILED", "ERROR", "XFAILED"):
-                msg = getattr(report, "longreprtext", None) or (
-                    str(report.longrepr) if report.longrepr else None
-                )
 
             m_record = VerificationRecord(
                 nodeid=item.nodeid,
                 req_ids=[req_id],
                 status=m_status,
                 stage=stage,
+                step_id=step_id,
                 location=loc,
                 description=desc,
                 message=msg,

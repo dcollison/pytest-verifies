@@ -6,8 +6,8 @@ requirements, producing comprehensive Requirements Traceability Matrix (RTM) art
 
 from __future__ import annotations
 
-from pytest_verifies.context import verifies
+from pytest_verifies.context import step, verifies
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
-__all__ = ["verifies", "__version__"]
+__all__ = ["step", "verifies", "__version__"]

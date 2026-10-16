@@ -38,18 +38,24 @@ class BaselineRequirement:
 
 @dataclass
 class VerificationRecord:
-    """Represents an atomic verification result for one or more requirements."""
+    """Represents an atomic verification result or test procedure step."""
 
     nodeid: str
     req_ids: list[str]
     status: str  # "PASSED", "FAILED", "ERROR", "SKIPPED", "XFAILED", "XPASS"
     stage: str = "default"
+    step_id: str | None = None
     location: str = ""
     description: str | None = None
     message: str | None = None
     evidence: Any = None
     duration_s: float = 0.0
     timestamp: str = ""
+
+    @property
+    def is_action(self) -> bool:
+        """Return True if this record represents an action step without requirement IDs."""
+        return bool(self.step_id is not None and not self.req_ids)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise verification record to a JSON-compatible dictionary."""
@@ -58,6 +64,7 @@ class VerificationRecord:
             "req_ids": list(self.req_ids),
             "status": self.status,
             "stage": self.stage,
+            "step_id": self.step_id,
             "location": self.location,
             "description": self.description,
             "message": self.message,
@@ -74,6 +81,7 @@ class VerificationRecord:
             req_ids=[str(r) for r in data.get("req_ids", [])],
             status=str(data.get("status", "UNVERIFIED")),
             stage=str(data.get("stage", "default")),
+            step_id=data.get("step_id"),
             location=str(data.get("location", "")),
             description=data.get("description"),
             message=data.get("message"),
@@ -140,6 +148,7 @@ class ConsolidatedRequirement:
     is_orphan: bool = False
     status: str = "UNVERIFIED"  # "VERIFIED", "FAILED", "UNVERIFIED"
     stages_verified: dict[str, str] = field(default_factory=dict)
+    steps: list[str] = field(default_factory=list)
     records: list[VerificationRecord] = field(default_factory=list)
     verified_by_tests: list[str] = field(default_factory=list)
     evidence: list[Any] = field(default_factory=list)
@@ -156,6 +165,7 @@ class ConsolidatedRequirement:
             "is_orphan": self.is_orphan,
             "status": self.status,
             "stages_verified": dict(self.stages_verified),
+            "steps": list(self.steps),
             "records": [r.to_dict() for r in self.records],
             "verified_by_tests": list(self.verified_by_tests),
             "evidence": list(self.evidence),
@@ -177,6 +187,7 @@ class RTMReport:
     orphan_count: int = 0
     coverage_percentage: float = 0.0
     requirements: list[ConsolidatedRequirement] = field(default_factory=list)
+    test_records: list[VerificationRecord] = field(default_factory=list)
     runs: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -194,5 +205,6 @@ class RTMReport:
                 "coverage_percentage": round(self.coverage_percentage, 2),
             },
             "requirements": [r.to_dict() for r in self.requirements],
+            "test_records": [r.to_dict() for r in self.test_records],
             "runs": list(self.runs),
         }

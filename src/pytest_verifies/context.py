@@ -39,11 +39,13 @@ class _VerifiesContext(collections.abc.Collection):
     def __init__(
         self,
         *req_ids: str | Iterable[str],
+        step: str | None = None,
+        step_id: str | None = None,
         description: str | None = None,
         soft: bool = False,
         evidence: Any = None,
     ) -> None:
-        """Initialise verification context with requirement identifiers and optional metadata."""
+        """Initialise verification context with requirement identifiers, step ID, and optional metadata."""
         flattened: list[str] = []
         for item in req_ids:
             if isinstance(item, str):
@@ -55,10 +57,16 @@ class _VerifiesContext(collections.abc.Collection):
                     if isinstance(sub, str) and sub.strip():
                         flattened.append(sub.strip())
 
-        if not flattened:
-            raise ValueError("At least one non-empty requirement ID must be specified.")
+        raw_step = step_id if step_id is not None else step
+        cleaned_step = (
+            str(raw_step).strip() if raw_step is not None and str(raw_step).strip() else None
+        )
+
+        if not flattened and cleaned_step is None:
+            raise ValueError("At least one non-empty requirement ID or step ID must be specified.")
 
         self.req_ids: tuple[str, ...] = tuple(flattened)
+        self.step_id: str | None = cleaned_step
         self.description: str | None = description
         self.soft: bool = soft
         self.evidence: Any = evidence
@@ -66,10 +74,26 @@ class _VerifiesContext(collections.abc.Collection):
         self._start_time: float = 0.0
 
     @property
+    def step(self) -> str | None:
+        """Return the current step identifier."""
+        return self.step_id
+
+    @step.setter
+    def step(self, value: str | None) -> None:
+        """Set the step identifier."""
+        self.step_id = str(value).strip() if value is not None and str(value).strip() else None
+
+    def set_step(self, step_id: str) -> _VerifiesContext:
+        """Set the step identifier dynamically during execution."""
+        self.step = step_id
+        return self
+
+    @property
     def mark_decorator(self) -> pytest.MarkDecorator:
         """Pytest MarkDecorator representing this verification marker."""
         return pytest.mark.verifies(  # type: ignore[no-any-return]
             *self.req_ids,
+            step_id=self.step_id,
             description=self.description,
             evidence=self.evidence,
         )
@@ -189,6 +213,7 @@ class _VerifiesContext(collections.abc.Collection):
             req_ids=list(self.req_ids),
             status=status,
             stage=stage,
+            step_id=self.step_id,
             location=self.location,
             description=self.description,
             message=message,
@@ -207,7 +232,9 @@ class _VerifiesContext(collections.abc.Collection):
         is_soft = self.soft or _global_soft.get()
         if is_soft and exc_type is not None and issubclass(exc_type, AssertionError):
             formatted_exc = str(exc_val).strip() if exc_val is not None else "AssertionError"
-            failure_entry = f"[{', '.join(self.req_ids)}] ({self.location}):\n{formatted_exc}"
+            step_tag = f" [Step: {self.step_id}]" if self.step_id else ""
+            req_tag = f"[{', '.join(self.req_ids)}]" if self.req_ids else "[ACTION]"
+            failure_entry = f"{req_tag}{step_tag} ({self.location}):\n{formatted_exc}"
             try:
                 soft_list = _soft_failures.get()
                 soft_list.append(failure_entry)
@@ -220,6 +247,8 @@ class _VerifiesContext(collections.abc.Collection):
 
 def verifies(
     *req_ids: str | Iterable[str],
+    step: str | None = None,
+    step_id: str | None = None,
     description: str | None = None,
     soft: bool = False,
     evidence: Any = None,
@@ -228,6 +257,8 @@ def verifies(
 
     Args:
         *req_ids: One or more requirement identifiers (e.g. "REQ-001", "REQ-002").
+        step: Optional step identifier (e.g. "STEP-01").
+        step_id: Alias for step.
         description: Optional human-readable requirement description.
         soft: If True, assertion failures are logged without terminating the test function.
         evidence: Optional arbitrary data (dict, string, etc.) representing verification evidence.
@@ -237,6 +268,45 @@ def verifies(
     """
     return _VerifiesContext(
         *req_ids,
+        step=step,
+        step_id=step_id,
+        description=description,
+        soft=soft,
+        evidence=evidence,
+    )
+
+
+def step(
+    step_id: str,
+    description: str | None = None,
+    *req_ids: str | Iterable[str],
+    verifies: str | Iterable[str] | None = None,
+    soft: bool = False,
+    evidence: Any = None,
+) -> _VerifiesContext:
+    """Record a test procedure step (action step or requirement verification step).
+
+    Args:
+        step_id: Unique step identifier (e.g. "STEP-01", "STEP-1.2").
+        description: Optional human-readable action or check description.
+        *req_ids: Optional requirement identifiers verified by this step.
+        verifies: Optional requirement identifier or collection of identifiers.
+        soft: If True, assertion failures are logged without terminating the test.
+        evidence: Optional arbitrary data (dict, string, etc.) representing step evidence.
+
+    Returns:
+        _VerifiesContext: Step context manager and decorator.
+    """
+    all_reqs: list[str | Iterable[str]] = list(req_ids)
+    if verifies is not None:
+        if isinstance(verifies, str):
+            all_reqs.append(verifies)
+        elif isinstance(verifies, collections.abc.Iterable):
+            all_reqs.extend(verifies)
+
+    return _VerifiesContext(
+        *all_reqs,
+        step_id=step_id,
         description=description,
         soft=soft,
         evidence=evidence,
