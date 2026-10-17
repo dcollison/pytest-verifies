@@ -16,12 +16,12 @@ Supports array format or top-level dictionary:
 {
   "requirements": [
     {
-      "id": "REQ-001",
-      "text": "Users must authenticate with valid JWT bearer token"
+      "id": "REQ-FRUIT-001",
+      "text": "Apples must be crisp and delicious"
     },
     {
-      "id": "REQ-002",
-      "text": "Rate limiter must throttle exceeding 100 requests per minute"
+      "id": "REQ-ANIMAL-001",
+      "text": "All dogs must be good boys and able to bark"
     }
   ]
 }
@@ -31,8 +31,8 @@ Or as a compact dictionary:
 
 ```json
 {
-  "REQ-001": "Users must authenticate with valid JWT bearer token",
-  "REQ-002": "Rate limiter must throttle exceeding 100 requests per minute"
+  "REQ-FRUIT-001": "Apples must be crisp and delicious",
+  "REQ-ANIMAL-001": "All dogs must be good boys and able to bark"
 }
 ```
 
@@ -42,8 +42,8 @@ Requires an `id` column header (case-insensitive), paired with `text` (or `descr
 
 ```csv
 id,text
-REQ-001,Users must authenticate with valid JWT bearer token
-REQ-002,Rate limiter must throttle exceeding 100 requests per minute
+REQ-FRUIT-001,Apples must be crisp and delicious
+REQ-ANIMAL-001,All dogs must be good boys and able to bark
 ```
 
 ### 3. YAML (`requirements.yaml`)
@@ -52,10 +52,10 @@ Requires `pyyaml` (installed automatically if using `docs` or `dev` dependency g
 
 ```yaml
 requirements:
-  - id: REQ-001
-    text: Users must authenticate with valid JWT bearer token
-  - id: REQ-002
-    text: Rate limiter must throttle exceeding 100 requests per minute
+  - id: REQ-FRUIT-001
+    text: Apples must be crisp and delicious
+  - id: REQ-ANIMAL-001
+    text: All dogs must be good boys and able to bark
 ```
 
 ---

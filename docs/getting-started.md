@@ -26,12 +26,12 @@ Create a requirements manifest `requirements.json` (or `.csv` / `.yaml`):
 {
   "requirements": [
     {
-      "id": "REQ-AUTH-001",
-      "text": "Users must provide a valid JWT bearer token"
+      "id": "REQ-FRUIT-001",
+      "text": "Apples must be crisp and sweet"
     },
     {
-      "id": "REQ-RATE-001",
-      "text": "Rate limit API requests to 100 requests per minute"
+      "id": "REQ-ANIMAL-001",
+      "text": "Dogs must wag their tails when happy"
     }
   ]
 }
@@ -39,22 +39,22 @@ Create a requirements manifest `requirements.json` (or `.csv` / `.yaml`):
 
 ### 2. Annotate Your Pytest Tests
 
-In `tests/test_auth.py`:
+In `tests/test_orchard.py`:
 
 ```python
 from pytest_verifies import verifies
 
 
-@verifies("REQ-AUTH-001")
-def test_jwt_authentication():
-    token = {"sub": "user_123", "active": True}
-    assert token["active"] is True
+@verifies("REQ-FRUIT-001")
+def test_apple_crispness():
+    apple = {"variety": "Honeycrisp", "crisp": True}
+    assert apple["crisp"] is True
 
 
-def test_rate_limiter():
-    with verifies("REQ-RATE-001"):
-        request_count = 45
-        assert request_count <= 100
+def test_happy_dog():
+    with verifies("REQ-ANIMAL-001"):
+        dog = {"name": "Buster", "tail_wagging": True}
+        assert dog["tail_wagging"] is True
 ```
 
 ### 3. Run Pytest with Report Generation

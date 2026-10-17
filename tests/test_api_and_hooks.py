@@ -176,7 +176,7 @@ def test_edge_cases_xfail_and_skip(pytester: pytest.Pytester) -> None:
         def test_skipped():
             assert True
 
-        @pytest.mark.xfail(reason="Known upstream API defect")
+        @pytest.mark.xfail(reason="Kitten is currently napping")
         @verifies("REQ-XFAIL")
         def test_expected_failure():
             assert 1 == 0
@@ -209,15 +209,15 @@ def test_dynamic_evidence_attachment(pytester: pytest.Pytester) -> None:
         """
         from pytest_verifies import verifies
 
-        def test_api_metrics():
+        def test_zoo_snacks():
             # Static evidence passed into verifies
-            with verifies("REQ-EV-1", evidence={"latency_ms": 42.5, "http_status": 200}):
+            with verifies("REQ-EV-1", evidence={"apples_eaten": 4, "crisp": True}):
                 assert True
 
             # Dynamic attachment via ctx.attach and ctx.record_evidence
             with verifies("REQ-EV-2") as ctx:
-                ctx.attach("service_version", "3.1.0")
-                ctx.record_evidence({"cache_hit": True})
+                ctx.attach("favorite_fruit", "banana")
+                ctx.record_evidence({"tail_wagging": True})
                 assert True
         """
     )
@@ -236,19 +236,19 @@ def test_dynamic_evidence_attachment(pytester: pytest.Pytester) -> None:
     data = json.loads(json_path.read_text(encoding="utf-8"))
     reqs = {r["req_id"]: r for r in data["requirements"]}
 
-    assert reqs["REQ-EV-1"]["evidence"] == [{"latency_ms": 42.5, "http_status": 200}]
-    assert reqs["REQ-EV-2"]["evidence"] == [{"service_version": "3.1.0", "cache_hit": True}]
+    assert reqs["REQ-EV-1"]["evidence"] == [{"apples_eaten": 4, "crisp": True}]
+    assert reqs["REQ-EV-2"]["evidence"] == [{"favorite_fruit": "banana", "tail_wagging": True}]
 
     # Verify evidence in Markdown report
     md_text = md_path.read_text(encoding="utf-8")
-    assert "42.5" in md_text
-    assert "service_version" in md_text
-    assert "3.1.0" in md_text
+    assert "apples_eaten" in md_text
+    assert "favorite_fruit" in md_text
+    assert "banana" in md_text
 
     # Verify evidence in HTML report
     html_text = html_path.read_text(encoding="utf-8")
-    assert "latency_ms" in html_text
-    assert "cache_hit" in html_text
+    assert "apples_eaten" in html_text
+    assert "tail_wagging" in html_text
 
 
 def test_junit_xml_property_injection(pytester: pytest.Pytester) -> None:

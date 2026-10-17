@@ -14,20 +14,21 @@ Use `@verifies(...)` on test functions or test classes:
 from pytest_verifies import verifies
 
 
-@verifies("REQ-AUTH-001", "REQ-AUTH-002", description="Authentication service init")
-def test_auth_service_init():
-    assert True
+@verifies("REQ-DOG-001", "REQ-DOG-002", description="Golden retrievers are friendly dogs")
+def test_retriever_temperament():
+    dog = {"breed": "Golden Retriever", "friendly": True}
+    assert dog["friendly"] is True
 ```
 
 When decorating a test class, all test methods within the class automatically inherit verification tracking for the specified requirements:
 
 ```python
-@verifies("REQ-USER-001")
-class TestUserService:
-    def test_create_user(self):
-        assert True
+@verifies("REQ-DUCK-001")
+class TestDuckBehaviour:
+    def test_quack(self):
+        assert "quack" == "quack"
 
-    def test_delete_user(self):
+    def test_waddle(self):
         assert True
 ```
 
@@ -41,23 +42,22 @@ Use `with verifies(...)` for statement-level or multi-block verification:
 from pytest_verifies import verifies
 
 
-def test_jwt_claims():
+def test_fruit_basket():
     # Single-line check
-    with verifies("REQ-AUTH-001"):
-        assert 1 == 1
+    with verifies("REQ-FRUIT-001"):
+        assert "banana" != "orange"
 
     # Multi-statement block
-    with verifies("REQ-AUTH-002", description="Payload signature validation"):
-        issuer = "https://auth.example.com"
-        token = {"iss": issuer, "exp": 1893456000}
-        assert token["iss"] == issuer
+    with verifies("REQ-FRUIT-002", description="Lemons must be appropriately sour"):
+        lemon_sourness = 9
+        assert lemon_sourness > 5
 ```
 
 ---
 
 ## 3. Soft Assertions
 
-In standard Pytest execution, the first failed assertion aborts the test function. In software testing, it is often desirable to check several independent validations within a single test without aborting after the first failure.
+In standard Pytest execution, the first failed assertion aborts the test function. In verification testing, it is often desirable to check several independent qualities within a single test without aborting after the first failure.
 
 Enable soft assertions per block with `soft=True`, or globally across all blocks with `--verifies-soft`:
 
@@ -65,16 +65,18 @@ Enable soft assertions per block with `soft=True`, or globally across all blocks
 from pytest_verifies import verifies
 
 
-def test_user_profile_validation():
+def test_cat_qualities():
+    cat = {"is_napping": True, "purr_volume_db": 45, "caught_laser": False}
+
     # Block 1 fails softly; execution continues!
-    with verifies("REQ-VAL-001", soft=True):
-        assert 10 > 20, "Age below required threshold"
+    with verifies("REQ-CAT-001", soft=True):
+        assert cat["caught_laser"] is True, "The red dot eluded the cat once again!"
 
     # Block 2 executes and records VERIFIED
-    with verifies("REQ-VAL-002", soft=True):
-        assert "user@example.com".endswith(".com")
+    with verifies("REQ-CAT-002", soft=True):
+        assert cat["is_napping"] is True
 
-    # At the end of test_user_profile_validation, Pytest consolidates failures and fails the test.
+    # At the end of test_cat_qualities, Pytest consolidates failures and fails the test.
 ```
 
 ---
@@ -87,27 +89,27 @@ Audit frameworks require verifiable proof of test outcomes. Objective evidence c
 from pytest_verifies import verifies
 
 
-def test_payment_processing():
+def test_zoo_snack_time():
     # Static evidence dictionary
-    with verifies("REQ-PAY-001", evidence={"gateway": "Stripe", "currency": "GBP"}):
+    with verifies("REQ-PANDA-001", evidence={"favourite_food": "bamboo", "eaten_kg": 12}):
         assert True
 
     # Dynamic attachment during runtime
-    with verifies("REQ-PAY-002") as ctx:
-        latency_ms = 45.2
-        ctx.attach("latency_ms", latency_ms)
-        ctx.record_evidence({"idempotency_key": "idem_123456"})
-        assert latency_ms < 100.0
+    with verifies("REQ-MONKEY-001") as ctx:
+        bananas_eaten = 5
+        ctx.attach("bananas_eaten", bananas_eaten)
+        ctx.record_evidence({"snack_type": "ripe banana"})
+        assert bananas_eaten >= 3
 ```
 
 ---
 
 ## 5. Test Procedure Steps & Action Steps
 
-In formal test protocols (such as enterprise verification, SOC2, or regulated software delivery), test specifications define explicit **Step IDs** (e.g. `STEP-01`, `1.1`). These steps fall into two categories:
+Test specifications often define explicit **Step IDs** (e.g. `STEP-01`, `1.1`), which fall into two categories:
 
-1. **Action Steps (Setup / Operation):** Perform state transitions, database seeding, or API calls without directly validating a requirement.
-2. **Verification Steps:** Directly assert system behaviour against one or more requirements.
+1. **Action Steps (Setup / Preparation):** Prepare ingredients or configure state without directly validating a requirement.
+2. **Verification Steps:** Directly assert behaviour against one or more requirements.
 
 Import `step` alongside `verifies`:
 
@@ -115,29 +117,30 @@ Import `step` alongside `verifies`:
 from pytest_verifies import step, verifies
 
 
-def test_user_checkout_journey():
-    # 1. Pure Action Step: No requirement verified
-    with step("STEP-01", description="Seed customer and inventory records"):
-        db.seed_customer("user_123")
-        db.seed_product("prod_456", stock=10)
+def test_fruit_salad_recipe():
+    # 1. Action Step: Prepare ingredients without verifying a requirement
+    with step("STEP-01", description="Chop watermelon and peel bananas"):
+        salad_bowl = ["watermelon", "banana"]
 
     # 2. Action Step with Telemetry Evidence
-    with step("STEP-02", description="Apply discount code to cart") as s:
-        discount = cart.apply_coupon("SAVE20")
-        s.attach("discount_percentage", discount.pct)
+    with step("STEP-02", description="Add fresh berries to bowl") as s:
+        salad_bowl.extend(["strawberry", "blueberry"])
+        s.attach("berry_count", 2)
 
     # 3. Verification Step using step(..., verifies=...)
     with step(
-        "STEP-03", description="Verify discounted total calculation", verifies="REQ-CART-004"
+        "STEP-03",
+        description="Verify fruit salad contains at least 3 fruits",
+        verifies="REQ-SALAD-001",
     ):
-        assert cart.total_gbp == 80.0
+        assert len(salad_bowl) >= 3
 
     # 4. Verification Step using verifies(..., step=...)
-    with verifies("REQ-PAY-005", step="STEP-04", description="Verify payment confirmation webhook"):
-        assert webhook.delivered is True
+    with verifies("REQ-SALAD-002", step="STEP-04", description="Verify watermelon is in the bowl"):
+        assert "watermelon" in salad_bowl
 ```
 
 ### Benefits of Step Tracking
-* **Failure Attribution:** If an action step fails (e.g. database timeout during `STEP-01`), the failure report clearly attributes the issue to the action step without falsely recording requirement defects.
+* **Failure Attribution:** If an action step fails (e.g. dropped the bowl during `STEP-01`), the failure report clearly attributes the issue to the action step without falsely recording requirement defects.
 * **Audit Trail:** Reports include a complete test procedure walkthrough table matching your formal verification protocol.
-* **ALM / PLM Synchronization:** Step IDs export directly to the `steps` column in CSV and JSON for tools like Polarion, Jira Xray, and Jama.
+* **Traceability Export:** Step IDs export directly to the `steps` column in CSV and JSON for external reporting tools.

@@ -24,11 +24,11 @@ def test_baseline_loader_formats(tmp_path: Path) -> None:
                 "requirements": [
                     {
                         "id": "REQ-001",
-                        "text": "Validate JWT bearer token signature and expiration",
+                        "text": "Apples must be crisp and delicious",
                     },
                     {
                         "id": "REQ-002",
-                        "text": "Rate limiter allows max 100 requests per minute",
+                        "text": "Bananas must be yellow and sweet",
                     },
                 ]
             }
@@ -37,40 +37,40 @@ def test_baseline_loader_formats(tmp_path: Path) -> None:
     )
     base_json = load_baseline(json_path)
     assert len(base_json) == 2
-    assert base_json["REQ-001"].text == "Validate JWT bearer token signature and expiration"
-    assert base_json["REQ-002"].text == "Rate limiter allows max 100 requests per minute"
+    assert base_json["REQ-001"].text == "Apples must be crisp and delicious"
+    assert base_json["REQ-002"].text == "Bananas must be yellow and sweet"
 
     # 2. CSV Format with id and text
     csv_path = tmp_path / "baseline.csv"
     csv_path.write_text(
         "id,text\n"
-        "REQ-003,Stripe webhook idempotency key handling\n"
-        "REQ-004,Sanitise user input against XSS attacks\n",
+        "REQ-003,Strawberries must be fragrant and red\n"
+        "REQ-004,Pineapples must wear a leafy crown\n",
         encoding="utf-8",
     )
     base_csv = load_baseline(csv_path)
     assert len(base_csv) == 2
-    assert base_csv["REQ-003"].text == "Stripe webhook idempotency key handling"
-    assert base_csv["REQ-004"].text == "Sanitise user input against XSS attacks"
+    assert base_csv["REQ-003"].text == "Strawberries must be fragrant and red"
+    assert base_csv["REQ-004"].text == "Pineapples must wear a leafy crown"
 
     # CSV with alternative 'description' header
     csv_desc_path = tmp_path / "baseline_desc.csv"
     csv_desc_path.write_text(
-        "id,description\nREQ-005,Validate payload against JSON schema\n",
+        "id,description\nREQ-005,Blueberries must be round and juicy\n",
         encoding="utf-8",
     )
     base_desc = load_baseline(csv_desc_path)
-    assert base_desc["REQ-005"].text == "Validate payload against JSON schema"
+    assert base_desc["REQ-005"].text == "Blueberries must be round and juicy"
 
     # 3. YAML Format
     yaml_path = tmp_path / "baseline.yaml"
     yaml_path.write_text(
-        "requirements:\n  - id: REQ-006\n    text: Encrypt user credentials with Argon2id\n",
+        "requirements:\n  - id: REQ-006\n    text: Mangoes must be golden and sweet\n",
         encoding="utf-8",
     )
     base_yaml = load_baseline(yaml_path)
     assert len(base_yaml) == 1
-    assert base_yaml["REQ-006"].text == "Encrypt user credentials with Argon2id"
+    assert base_yaml["REQ-006"].text == "Mangoes must be golden and sweet"
 
     # 4. Error cases
     non_existent = tmp_path / "missing.json"
@@ -95,10 +95,10 @@ def test_multi_run_shard_combining_and_stage_consolidation(pytester: pytest.Pyte
                 "requirements": [
                     {
                         "id": "REQ-001",
-                        "text": "Process checkout payment with idempotency key",
+                        "text": "Apples must be crisp and sweet",
                     },
-                    {"id": "REQ-002", "text": "Dispatch order confirmation email"},
-                    {"id": "REQ-003", "text": "Emit audit log event to Kafka"},
+                    {"id": "REQ-002", "text": "Bananas must be yellow and ripe"},
+                    {"id": "REQ-003", "text": "Watermelons must be sweet and juicy"},
                 ]
             }
         ),
@@ -133,7 +133,7 @@ def test_multi_run_shard_combining_and_stage_consolidation(pytester: pytest.Pyte
 
         def test_system_req1():
             with verifies("REQ-001"):
-                assert False, "Payment gateway connection timeout during system test"
+                assert False, "Watermelon dropped on the kitchen floor during picnic prep"
         """
     )
     result_system = pytester.runpytest(
@@ -173,7 +173,7 @@ def test_multi_run_shard_combining_and_stage_consolidation(pytester: pytest.Pyte
     assert reqs["REQ-001"]["status"] == "FAILED"
     assert reqs["REQ-001"]["stages_verified"] == {"unit": "VERIFIED", "system": "FAILED"}
     assert len(reqs["REQ-001"]["failure_messages"]) == 1
-    assert "Payment gateway connection timeout" in reqs["REQ-001"]["failure_messages"][0]
+    assert "Watermelon dropped on the kitchen floor" in reqs["REQ-001"]["failure_messages"][0]
 
     # REQ-002 passed in unit -> overall consolidated status VERIFIED
     assert reqs["REQ-002"]["status"] == "VERIFIED"
@@ -207,7 +207,7 @@ def test_multi_run_shard_combining_and_stage_consolidation(pytester: pytest.Pyte
     assert "# Requirements Traceability Matrix (RTM)" in md_content
     assert "## Summary Scorecard" in md_content
     assert "REQ-001" in md_content
-    assert "Payment gateway connection timeout" in md_content
+    assert "Watermelon dropped on the kitchen floor" in md_content
 
     # Verify HTML output
     assert html_out.is_file()
@@ -224,7 +224,7 @@ def test_cli_disallow_orphans_quality_gate(pytester: pytest.Pytester) -> None:
     shards_dir = pytester.path / "shards"
     baseline_file = pytester.path / "baseline.json"
     baseline_file.write_text(
-        json.dumps({"requirements": [{"id": "REQ-VALID-01", "text": "Valid user payload"}]}),
+        json.dumps({"requirements": [{"id": "REQ-VALID-01", "text": "Golden delicious apple"}]}),
         encoding="utf-8",
     )
 
@@ -341,9 +341,9 @@ def test_console_summary_color_and_partial(pytester: pytest.Pytester) -> None:
         json.dumps(
             {
                 "requirements": [
-                    {"id": "REQ-PASS", "text": "Passing auth check"},
-                    {"id": "REQ-FAIL", "text": "Failing payment gateway"},
-                    {"id": "REQ-PART", "text": "Partial caching requirement"},
+                    {"id": "REQ-PASS", "text": "Happy golden retriever"},
+                    {"id": "REQ-FAIL", "text": "Grumpy garden badger"},
+                    {"id": "REQ-PART", "text": "Curious ginger kitten"},
                 ]
             }
         ),

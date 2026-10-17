@@ -15,20 +15,20 @@ def test_step_action_and_verification_context(pytester: pytest.Pytester) -> None
         from pytest_verifies import step, verifies
 
         def test_mixed_steps():
-            # 1. Action step: Setup test fixture
-            with step("STEP-01", description="Initialise mock database session") as s1:
-                s1.attach("db_connected", True)
+            # 1. Action step: Prepare bowl
+            with step("STEP-01", description="Prepare fruit bowl") as s1:
+                s1.attach("bowl_ready", True)
                 status = "ready"
                 assert status == "ready"
 
             # 2. Verification step using step(..., verifies=...)
-            with step("STEP-02", description="Validate user session token", verifies="REQ-AUTH-001"):
+            with step("STEP-02", description="Verify apple is crisp", verifies="REQ-FRUIT-001"):
                 assert 200 == 200
 
             # 3. Verification step using verifies(..., step=...)
-            with verifies("REQ-AUTH-002", step="STEP-03", description="Verify rate limit quota"):
-                remaining_quota = 50
-                assert remaining_quota > 0
+            with verifies("REQ-FRUIT-002", step="STEP-03", description="Verify banana is sweet"):
+                sweetness = 50
+                assert sweetness > 0
         """
     )
 
@@ -53,17 +53,17 @@ def test_step_action_and_verification_context(pytester: pytest.Pytester) -> None
     assert records[0]["step_id"] == "STEP-01"
     assert records[0]["req_ids"] == []
     assert records[0]["status"] == "PASSED"
-    assert records[0]["description"] == "Initialise mock database session"
-    assert records[0]["evidence"] == {"db_connected": True}
+    assert records[0]["description"] == "Prepare fruit bowl"
+    assert records[0]["evidence"] == {"bowl_ready": True}
 
     # Record 2: Verification step via step(...)
     assert records[1]["step_id"] == "STEP-02"
-    assert records[1]["req_ids"] == ["REQ-AUTH-001"]
+    assert records[1]["req_ids"] == ["REQ-FRUIT-001"]
     assert records[1]["status"] == "PASSED"
 
     # Record 3: Verification step via verifies(...)
     assert records[2]["step_id"] == "STEP-03"
-    assert records[2]["req_ids"] == ["REQ-AUTH-002"]
+    assert records[2]["req_ids"] == ["REQ-FRUIT-002"]
     assert records[2]["status"] == "PASSED"
 
 
@@ -75,15 +75,15 @@ def test_step_failure_and_soft_assertions(pytester: pytest.Pytester) -> None:
 
         def test_soft_steps():
             # Soft action step fails; execution continues
-            with step("STEP-01", description="Seed customer records", soft=True):
-                assert False, "Database connection pool exhausted"
+            with step("STEP-01", description="Slice watermelon", soft=True):
+                assert False, "Watermelon dropped on the floor!"
 
             # Soft verification step fails; execution continues
-            with step("STEP-02", description="Validate JWT signature", verifies="REQ-AUTH-001", soft=True):
-                assert False, "Token signature invalid: RS256 mismatch"
+            with step("STEP-02", description="Taste test lemon", verifies="REQ-FRUIT-001", soft=True):
+                assert False, "Lemon was unexpectedly sweet!"
 
             # Passing step
-            with step("STEP-03", description="Close database session"):
+            with step("STEP-03", description="Wipe cutting board"):
                 assert True
         """
     )
@@ -92,9 +92,9 @@ def test_step_failure_and_soft_assertions(pytester: pytest.Pytester) -> None:
     result.assert_outcomes(failed=1)
     stdout = result.stdout.str()
     assert "[ACTION] [Step: STEP-01]" in stdout
-    assert "Database connection pool exhausted" in stdout
-    assert "[REQ-AUTH-001] [Step: STEP-02]" in stdout
-    assert "Token signature invalid: RS256 mismatch" in stdout
+    assert "Watermelon dropped on the floor!" in stdout
+    assert "[REQ-FRUIT-001] [Step: STEP-02]" in stdout
+    assert "Lemon was unexpectedly sweet!" in stdout
 
 
 def test_step_reporting_and_combiner(pytester: pytest.Pytester) -> None:
@@ -105,8 +105,8 @@ def test_step_reporting_and_combiner(pytester: pytest.Pytester) -> None:
             {
                 "requirements": [
                     {
-                        "id": "REQ-AUTH-001",
-                        "text": "Users must authenticate via JWT bearer token",
+                        "id": "REQ-FRUIT-001",
+                        "text": "Apples must be crisp and delicious",
                     }
                 ]
             }
@@ -119,10 +119,10 @@ def test_step_reporting_and_combiner(pytester: pytest.Pytester) -> None:
         from pytest_verifies import step
 
         def test_protocol():
-            with step("STEP-INIT", description="Generate mock credentials"):
+            with step("STEP-INIT", description="Wash fruit under tap"):
                 assert True
 
-            with step("STEP-CHECK", description="Validate token signature", verifies="REQ-AUTH-001"):
+            with step("STEP-CHECK", description="Inspect apple for freshness", verifies="REQ-FRUIT-001"):
                 assert True
         """
     )

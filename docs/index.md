@@ -24,15 +24,15 @@
 from pytest_verifies import verifies
 
 
-@verifies("REQ-AUTH-001", description="Users must authenticate with valid JWT tokens")
-def test_jwt_authentication():
-    token = {"sub": "user_123", "exp": 1893456000}
-    assert token["exp"] > 1700000000
+@verifies("REQ-FRUIT-001", description="Apples must be red and crunchy")
+def test_apple_crunch():
+    apple = {"colour": "red", "crunch_score": 9.5}
+    assert apple["crunch_score"] >= 8.0
 
 
-def test_api_rate_limiting():
-    with verifies("REQ-RATE-001", soft=True, evidence={"limit": 60}) as ctx:
-        request_count = 42
-        ctx.attach("request_count", request_count)
-        assert request_count <= 60
+def test_puppy_happiness():
+    with verifies("REQ-PUPPY-001", soft=True, evidence={"belly_rubs": 10}) as ctx:
+        tail_wags_per_min = 120
+        ctx.attach("tail_wags_per_min", tail_wags_per_min)
+        assert tail_wags_per_min > 60
 ```

@@ -56,10 +56,10 @@ Decorate test functions or classes to associate them with one or more requiremen
 from pytest_verifies import verifies
 
 
-@verifies("REQ-AUTH-001", "REQ-AUTH-002", description="User token format and expiration")
-def test_jwt_claims():
-    payload = {"sub": "user_42", "exp": 1893456000}
-    assert payload["exp"] > 1700000000
+@verifies("REQ-DOG-001", "REQ-DOG-002", description="Dogs must be friendly and able to bark")
+def test_dog_attributes():
+    dog = {"name": "Buster", "species": "Canis familiaris", "barks": True}
+    assert dog["barks"] is True
 ```
 
 ### 3.2 Single-Line Context Manager
@@ -70,10 +70,10 @@ Verify fine-grained inline statements while preserving full assertion diffs:
 from pytest_verifies import verifies
 
 
-def test_api_endpoint():
-    response = {"status": 200, "content_type": "application/json"}
-    with verifies("REQ-API-010"):
-        assert response["status"] == 200
+def test_apple_ripeness():
+    apple = {"variety": "Honeycrisp", "colour": "red", "sweetness": 8}
+    with verifies("REQ-FRUIT-001"):
+        assert apple["colour"] == "red"
 ```
 
 ### 3.3 Soft Assertions & Objective Evidence
@@ -84,24 +84,24 @@ Evaluate multiple requirements within a single test execution without early term
 from pytest_verifies import verifies
 
 
-def test_user_registration():
-    email = "developer@example.com"
-    request_latency_ms = 45.2
+def test_fruit_basket_quality():
+    banana = {"colour": "yellow", "spots": 2}
+    kiwi = {"fuzzy": True, "sweetness_brix": 14.5}
 
     # Block 1: Soft assertion with static objective evidence
     with verifies(
-        "REQ-USER-001",
-        description="Valid email address required",
+        "REQ-FRUIT-002",
+        description="Bananas must be yellow when ready to eat",
         soft=True,
-        evidence={"email": email, "format": "RFC 5322"},
+        evidence={"banana_spots": banana["spots"], "ready": True},
     ):
-        assert "@" in email and email.endswith(".com")
+        assert banana["colour"] == "yellow"
 
-    # Block 2: Execution continues even if REQ-USER-001 fails
-    with verifies("REQ-PERF-001", soft=True) as ctx:
-        ctx.attach("request_latency_ms", request_latency_ms)
-        ctx.record_evidence({"cache_hit": True})
-        assert request_latency_ms < 100.0
+    # Block 2: Execution continues even if Block 1 fails
+    with verifies("REQ-FRUIT-003", soft=True) as ctx:
+        ctx.attach("sweetness_brix", kiwi["sweetness_brix"])
+        ctx.record_evidence({"variety": "Golden Kiwi"})
+        assert kiwi["sweetness_brix"] > 12.0
 ```
 
 ### 3.4 Parametrised Tests
@@ -114,39 +114,41 @@ from pytest_verifies import verifies
 
 
 @pytest.mark.parametrize(
-    "discount_code,expected_rate",
+    "fruit,expected_colour",
     [
-        pytest.param("SUMMER10", 0.10, marks=verifies("REQ-PROMO-001")),
-        pytest.param("VIP25", 0.25, marks=verifies("REQ-PROMO-002")),
+        pytest.param("banana", "yellow", marks=verifies("REQ-FRUIT-001")),
+        pytest.param("apple", "red", marks=verifies("REQ-FRUIT-002")),
+        pytest.param("lime", "green", marks=verifies("REQ-FRUIT-003")),
     ],
 )
-def test_promo_discount_rates(discount_code, expected_rate):
-    assert discount_code in ("SUMMER10", "VIP25")
-    assert expected_rate > 0.0
+def test_fruit_colours(fruit, expected_colour):
+    fruit_colours = {"banana": "yellow", "apple": "red", "lime": "green"}
+    assert fruit_colours[fruit] == expected_colour
 ```
 
 ### 3.5 Test Procedure Steps & Action Steps
 
-Formal test protocols often require tracking discrete step IDs (`STEP-01`, `1.1`), including pure **Action Steps** (setup/fixtures) and **Verification Steps** (checking requirements):
+Test protocols often require tracking discrete step IDs (`STEP-01`, `1.1`), including **Action Steps** (preparing state) and **Verification Steps** (checking requirements):
 
 ```python
 from pytest_verifies import step, verifies
 
 
-def test_order_checkout_flow():
-    # Action step: Setup mock state without validating a requirement
-    with step("STEP-01", description="Seed customer cart and catalog items"):
-        cart.add_item("item_123", quantity=2)
-        cart.apply_promo("WELCOME10")
+def test_fruit_salad_preparation():
+    # Action step: Prepare ingredients without verifying a requirement
+    with step("STEP-01", description="Chop watermelon and peel bananas"):
+        bowl = ["watermelon", "banana"]
+        bowl.append("strawberries")
 
-    # Verification step: Directly validates REQ-CART-001
-    with step("STEP-02", description="Verify discount calculation", verifies="REQ-CART-001"):
-        assert cart.total_gbp == 90.0
+    # Verification step: Directly validates REQ-SALAD-001
+    with step(
+        "STEP-02", description="Verify fruit salad has at least 3 fruits", verifies="REQ-SALAD-001"
+    ):
+        assert len(bowl) >= 3
 
     # Verification step with verifies(..., step=...)
-    with verifies("REQ-PAY-002", step="STEP-03", description="Verify payment charge idempotency"):
-        charge = payment_gateway.create_charge(idempotency_key="key_abc123")
-        assert charge.status == "SUCCEEDED"
+    with verifies("REQ-SALAD-002", step="STEP-03", description="Verify strawberries are present"):
+        assert "strawberries" in bowl
 ```
 
 ---
@@ -155,7 +157,7 @@ def test_order_checkout_flow():
 
 | Option | Ini Configuration | Description |
 | :--- | :--- | :--- |
-| `--req="PATTERN"` | — | Comma-separated requirement IDs or glob patterns to filter tests (e.g. `--req="REQ-AUTH-*,REQ-PAY-001"`). |
+| `--req="PATTERN"` | — | Comma-separated requirement IDs or glob patterns to filter tests (e.g. `--req="REQ-FRUIT-*,REQ-ANIMAL-001"`). |
 | `--verifies-out=DIR` | `verifies_out = DIR` | Directory to output `.jsonl` execution shards. |
 | `--verifies-stage=NAME` | `verifies_stage = NAME` | Stage label for execution shard (default: `"default"`). |
 | `--verifies-baseline=PATH` | `verifies_baseline = PATH` | Path to baseline requirement manifest (`.json`, `.csv`, `.yaml`). |
@@ -178,12 +180,12 @@ Baseline manifests declare formal specifications against which automated tests a
 {
   "requirements": [
     {
-      "id": "REQ-001",
-      "text": "Authenticate users using JWT bearer tokens"
+      "id": "REQ-FRUIT-001",
+      "text": "Apples must be crisp and delicious"
     },
     {
-      "id": "REQ-002",
-      "text": "Rate limiter must throttle exceeding 100 requests per minute"
+      "id": "REQ-ANIMAL-001",
+      "text": "All dogs must be good boys and able to bark"
     }
   ]
 }
@@ -192,17 +194,17 @@ Baseline manifests declare formal specifications against which automated tests a
 ### CSV Manifest (`requirements.csv`)
 ```csv
 id,text
-REQ-001,Authenticate users using JWT bearer tokens
-REQ-002,Rate limiter must throttle exceeding 100 requests per minute
+REQ-FRUIT-001,Apples must be crisp and delicious
+REQ-ANIMAL-001,All dogs must be good boys and able to bark
 ```
 
 ### YAML Manifest (`requirements.yaml`)
 ```yaml
 requirements:
-  - id: REQ-001
-    text: Authenticate users using JWT bearer tokens
-  - id: REQ-002
-    text: Rate limiter must throttle exceeding 100 requests per minute
+  - id: REQ-FRUIT-001
+    text: Apples must be crisp and delicious
+  - id: REQ-ANIMAL-001
+    text: All dogs must be good boys and able to bark
 ```
 
 ---
