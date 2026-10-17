@@ -112,7 +112,7 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
               {details_block}
             </details>
           </td>
-          <td class="col-title">{html.escape(req.title) or "<em>(No title)</em>"}</td>
+          <td class="col-text">{html.escape(req.text) or "<em>(No text)</em>"}</td>
           <td class="col-status">
             <span class="badge badge-{status_lower}">{display_status}</span>
             {badge_extra}
@@ -403,7 +403,7 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
         <button class="btn" data-filter="unverified">Unverified ({report.unverified_count})</button>
         <button class="btn" data-filter="orphan">Orphans ({report.orphan_count})</button>
       </div>
-      <input type="text" id="searchInput" class="search-box" placeholder="Filter by ID, Title, or Test..." />
+      <input type="text" id="searchInput" class="search-box" placeholder="Filter by ID, Text, or Test..." />
     </div>
 
     <div class="table-container">
@@ -411,7 +411,7 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
         <thead>
           <tr>
             <th>Requirement ID</th>
-            <th>Title</th>
+            <th>Requirement Text</th>
             <th>Status</th>
             <th>In Baseline</th>
             <th>Stages</th>

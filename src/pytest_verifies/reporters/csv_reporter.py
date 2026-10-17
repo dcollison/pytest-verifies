@@ -30,7 +30,7 @@ def generate_csv_report(report: RTMReport, output_path: str | Path | None = None
     writer.writerow(
         [
             "req_id",
-            "title",
+            "text",
             "status",
             "in_baseline",
             "stages",
@@ -55,7 +55,7 @@ def generate_csv_report(report: RTMReport, output_path: str | Path | None = None
         writer.writerow(
             [
                 req.req_id,
-                req.title,
+                req.text,
                 req.status,
                 "TRUE" if req.in_baseline else "FALSE",
                 stages_str,

@@ -6,7 +6,7 @@ Consistent British English spelling is used throughout.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -15,24 +15,55 @@ class BaselineRequirement:
     """Represents a requirement definition imported from an external baseline manifest."""
 
     id: str
-    title: str = ""
-    description: str = ""
-    priority: str = ""
-    category: str = ""
+    text: str = ""
+
+    def __init__(
+        self,
+        id: str,
+        text: str = "",
+        description: str = "",
+        title: str = "",
+    ) -> None:
+        self.id = id.strip()
+        self.text = (text or description or title or "").strip()
+
+    @property
+    def description(self) -> str:
+        """Alias for text for backwards compatibility."""
+        return self.text
+
+    @description.setter
+    def description(self, val: str) -> None:
+        self.text = val.strip()
+
+    @property
+    def title(self) -> str:
+        """Alias for text for backwards compatibility."""
+        return self.text
+
+    @title.setter
+    def title(self, val: str) -> None:
+        self.text = val.strip()
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise baseline requirement to a dictionary."""
-        return asdict(self)
+        return {
+            "id": self.id,
+            "text": self.text,
+        }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> BaselineRequirement:
         """Deserialise baseline requirement from a dictionary."""
         return cls(
             id=str(data.get("id", "")).strip(),
-            title=str(data.get("title", "")).strip(),
-            description=str(data.get("description", "")).strip(),
-            priority=str(data.get("priority", "")).strip(),
-            category=str(data.get("category", "")).strip(),
+            text=str(
+                data.get("text")
+                or data.get("description")
+                or data.get("title")
+                or data.get("requirement")
+                or ""
+            ).strip(),
         )
 
 
@@ -141,9 +172,7 @@ class ConsolidatedRequirement:
     """Consolidated traceability status and evidence for an individual requirement."""
 
     req_id: str
-    title: str = ""
-    description: str = ""
-    priority: str = ""
+    text: str = ""
     in_baseline: bool = True
     is_orphan: bool = False
     status: str = "UNVERIFIED"  # "VERIFIED", "FAILED", "UNVERIFIED"
@@ -154,13 +183,29 @@ class ConsolidatedRequirement:
     evidence: list[Any] = field(default_factory=list)
     failure_messages: list[str] = field(default_factory=list)
 
+    @property
+    def description(self) -> str:
+        """Alias for text for backwards compatibility."""
+        return self.text
+
+    @description.setter
+    def description(self, val: str) -> None:
+        self.text = val
+
+    @property
+    def title(self) -> str:
+        """Alias for text for backwards compatibility."""
+        return self.text
+
+    @title.setter
+    def title(self, val: str) -> None:
+        self.text = val
+
     def to_dict(self) -> dict[str, Any]:
         """Serialise consolidated requirement to a dictionary."""
         return {
             "req_id": self.req_id,
-            "title": self.title,
-            "description": self.description,
-            "priority": self.priority,
+            "text": self.text,
             "in_baseline": self.in_baseline,
             "is_orphan": self.is_orphan,
             "status": self.status,

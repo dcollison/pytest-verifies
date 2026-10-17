@@ -76,12 +76,18 @@ def _load_csv_baseline(path: Path) -> dict[str, BaselineRequirement]:
                     f"Line {line_no} in CSV baseline manifest '{path}' contains an empty requirement ID."
                 )
 
+            # Accept text, description, title, or requirement as the statement text
+            req_text = (
+                norm_row.get("text")
+                or norm_row.get("description")
+                or norm_row.get("title")
+                or norm_row.get("requirement")
+                or ""
+            )
+
             requirements[req_id] = BaselineRequirement(
                 id=req_id,
-                title=norm_row.get("title", ""),
-                description=norm_row.get("description", ""),
-                priority=norm_row.get("priority", "").upper(),
-                category=norm_row.get("category", ""),
+                text=req_text,
             )
 
     return requirements

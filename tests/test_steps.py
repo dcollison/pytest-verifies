@@ -105,8 +105,7 @@ def test_step_reporting_and_combiner(pytester: pytest.Pytester) -> None:
                 "requirements": [
                     {
                         "id": "REQ-PWR-001",
-                        "title": "Nominal Power Rail",
-                        "priority": "HIGH",
+                        "text": "Nominal Power Rail",
                     }
                 ]
             }

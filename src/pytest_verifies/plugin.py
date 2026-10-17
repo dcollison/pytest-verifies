@@ -306,7 +306,9 @@ class VerifiesControllerPlugin:
             return
 
         terminalreporter.write_sep("=", "Requirements Traceability Matrix (RTM)", bold=True)
-        header = f"{'Requirement ID':<20} {'Status':<12} {'Stages':<22} {'Tests':>5}  Title"
+        header = (
+            f"{'Requirement ID':<20} {'Status':<12} {'Stages':<22} {'Tests':>5}  Requirement Text"
+        )
         terminalreporter.write_line(header, bold=True)
         terminalreporter.write_line("-" * len(header))
 
@@ -345,7 +347,7 @@ class VerifiesControllerPlugin:
             terminalreporter.write(f"{status_text:<12} ", **status_color)
             terminalreporter.write(f"{stages_str:<22} ")
             terminalreporter.write(f"{test_count_str:>5}  ")
-            terminalreporter.write_line(req.title or "")
+            terminalreporter.write_line(req.text or "")
 
         terminalreporter.write_line("-" * len(header))
         total_reqs = report.total_baseline_requirements or report.total_observed_requirements

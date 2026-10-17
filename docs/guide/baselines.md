@@ -6,6 +6,8 @@ A baseline manifest establishes the master list of requirements that automated t
 
 ## Supported Formats
 
+Baseline manifests require only an `id` and a requirement statement `text`. For compatibility with various external systems and legacy CSV exports, `text`, `description`, `title`, and `requirement` are accepted interchangeably as the requirement statement.
+
 ### 1. JSON (`requirements.json`)
 
 Supports array format or top-level dictionary:
@@ -15,27 +17,33 @@ Supports array format or top-level dictionary:
   "requirements": [
     {
       "id": "REQ-001",
-      "title": "Over-current protection",
-      "description": "Trigger shutdown if current exceeds 2.0 A",
-      "priority": "HIGH"
+      "text": "Trigger shutdown if current exceeds 2.0 A"
     },
     {
       "id": "REQ-002",
-      "title": "Watchdog heartbeat",
-      "priority": "MEDIUM"
+      "text": "Watchdog periodic heartbeat timer within 500 ms"
     }
   ]
 }
 ```
 
+Or as a compact dictionary:
+
+```json
+{
+  "REQ-001": "Trigger shutdown if current exceeds 2.0 A",
+  "REQ-002": "Watchdog periodic heartbeat timer within 500 ms"
+}
+```
+
 ### 2. CSV (`requirements.csv`)
 
-Requires an `id` column header (case-insensitive):
+Requires an `id` column header (case-insensitive), paired with `text` (or `description` / `title` / `requirement`):
 
 ```csv
-id,title,description,priority
-REQ-001,Over-current protection,Trigger shutdown if current exceeds 2.0 A,HIGH
-REQ-002,Watchdog heartbeat,Periodic timer within 500 ms,MEDIUM
+id,text
+REQ-001,Trigger shutdown if current exceeds 2.0 A
+REQ-002,Watchdog periodic heartbeat timer within 500 ms
 ```
 
 ### 3. YAML (`requirements.yaml`)
@@ -45,11 +53,9 @@ Requires `pyyaml` (installed automatically if using `docs` or `dev` dependency g
 ```yaml
 requirements:
   - id: REQ-001
-    title: Over-current protection
-    priority: HIGH
+    text: Trigger shutdown if current exceeds 2.0 A
   - id: REQ-002
-    title: Watchdog heartbeat
-    priority: MEDIUM
+    text: Watchdog periodic heartbeat timer within 500 ms
 ```
 
 ---

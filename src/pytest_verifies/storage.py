@@ -205,17 +205,15 @@ def consolidate_requirements(
             orphan_count += 1
 
         req_baseline = baseline.get(req_id) if baseline else None
-        title = req_baseline.title if req_baseline else ""
-        description = req_baseline.description if req_baseline else ""
-        priority = req_baseline.priority if req_baseline else ""
+        text = req_baseline.text if req_baseline else ""
 
         req_records = records_by_req.get(req_id, [])
 
-        # If description is missing from baseline, infer from record if available
-        if not description:
+        # If text is missing from baseline, infer from record description if available
+        if not text:
             for r in req_records:
                 if r.description:
-                    description = r.description
+                    text = r.description
                     break
 
         # 2. Determine consolidated status
@@ -262,9 +260,7 @@ def consolidate_requirements(
 
         consolidated = ConsolidatedRequirement(
             req_id=req_id,
-            title=title,
-            description=description,
-            priority=priority,
+            text=text,
             in_baseline=in_baseline,
             is_orphan=is_orphan,
             status=status,

@@ -51,7 +51,9 @@ def generate_markdown_report(report: RTMReport, output_path: str | Path | None =
     # Requirements Traceability Table
     lines.append("## Requirements Traceability")
     lines.append("")
-    lines.append("| Requirement ID | Title | Status | In Baseline | Stages | Verified By Tests |")
+    lines.append(
+        "| Requirement ID | Requirement Text | Status | In Baseline | Stages | Verified By Tests |"
+    )
     lines.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
 
     for req in report.requirements:
@@ -68,7 +70,7 @@ def generate_markdown_report(report: RTMReport, output_path: str | Path | None =
         if req.is_orphan:
             status_badge += " [ORPHAN]"
 
-        title_display = req.title if req.title else "*(No title)*"
+        text_display = req.text if req.text else "—"
         in_base_display = "Yes" if req.in_baseline else "No"
         stages_display = (
             ", ".join(
@@ -80,7 +82,7 @@ def generate_markdown_report(report: RTMReport, output_path: str | Path | None =
         tests_display = f"{len(req.verified_by_tests)} test(s)" if req.verified_by_tests else "—"
 
         lines.append(
-            f"| `{req.req_id}` | {title_display} | {status_badge} | {in_base_display} | {stages_display} | {tests_display} |"
+            f"| `{req.req_id}` | {text_display} | {status_badge} | {in_base_display} | {stages_display} | {tests_display} |"
         )
     lines.append("")
 
@@ -98,13 +100,9 @@ def generate_markdown_report(report: RTMReport, output_path: str | Path | None =
 
             lines.append("<details>")
             lines.append(
-                f"<summary><b>{html.escape(req.req_id)}</b> — {html.escape(req.title or req.status)}</summary>"
+                f"<summary><b>{html.escape(req.req_id)}</b> — {html.escape(req.text or req.status)}</summary>"
             )
             lines.append("")
-
-            if req.description:
-                lines.append(f"> {html.escape(req.description)}")
-                lines.append("")
 
             if req.failure_messages:
                 lines.append("#### Failure Diagnostics:")

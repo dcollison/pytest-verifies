@@ -171,7 +171,7 @@ def test_motor_speed_control():
 
 ## 5. Baseline Requirement Manifests
 
-Baseline manifests declare formal specifications against which automated tests are verified.
+Baseline manifests declare formal specifications against which automated tests are verified. Baseline requirements need only an `id` and a requirement statement `text` (or `description` / `title` / `requirement` interchangeably).
 
 ### JSON Manifest (`requirements.json`)
 ```json
@@ -179,15 +179,11 @@ Baseline manifests declare formal specifications against which automated tests a
   "requirements": [
     {
       "id": "REQ-001",
-      "title": "Power Rail Tolerance",
-      "description": "System shall maintain 5.0 V +/- 2%",
-      "priority": "HIGH"
+      "text": "System shall maintain 5.0 V +/- 2%"
     },
     {
       "id": "REQ-002",
-      "title": "Thermal Cutoff",
-      "description": "Cutoff threshold at 85 °C",
-      "priority": "CRITICAL"
+      "text": "Thermal cutoff threshold at 85 °C"
     }
   ]
 }
@@ -195,22 +191,18 @@ Baseline manifests declare formal specifications against which automated tests a
 
 ### CSV Manifest (`requirements.csv`)
 ```csv
-id,title,description,priority
-REQ-001,Power Rail Tolerance,System shall maintain 5.0 V +/- 2%,HIGH
-REQ-002,Thermal Cutoff,Cutoff threshold at 85 °C,CRITICAL
+id,text
+REQ-001,System shall maintain 5.0 V +/- 2%
+REQ-002,Thermal cutoff threshold at 85 °C
 ```
 
 ### YAML Manifest (`requirements.yaml`)
 ```yaml
 requirements:
   - id: REQ-001
-    title: Power Rail Tolerance
-    description: System shall maintain 5.0 V +/- 2%
-    priority: HIGH
+    text: System shall maintain 5.0 V +/- 2%
   - id: REQ-002
-    title: Thermal Cutoff
-    description: Cutoff threshold at 85 °C
-    priority: CRITICAL
+    text: Thermal cutoff threshold at 85 °C
 ```
 
 ---

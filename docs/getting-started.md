@@ -27,13 +27,11 @@ Create a requirements manifest `requirements.json` (or `.csv` / `.yaml`):
   "requirements": [
     {
       "id": "REQ-PWR-001",
-      "title": "Nominal Power Rail",
-      "priority": "HIGH"
+      "text": "Nominal Power Rail 5.0 V +/- 2%"
     },
     {
       "id": "REQ-SAF-001",
-      "title": "Thermal Cutoff Guard",
-      "priority": "CRITICAL"
+      "text": "Thermal Cutoff Guard at 85 °C"
     }
   ]
 }
