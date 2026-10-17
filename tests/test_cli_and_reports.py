@@ -390,3 +390,165 @@ def test_console_summary_color_and_partial(pytester: pytest.Pytester) -> None:
             "*Total: 3*Verified: 2*",
         ]
     )
+
+
+def test_baseline_loader_edge_cases(tmp_path: Path) -> None:
+    """Verify baseline loader handles title/requirement keys, dict formats, None values, and invalid inputs."""
+    # 1. Key-value dict format with title, requirement, scalar, None, and whitespace fallback
+    dict_json = tmp_path / "dict_baseline.json"
+    dict_json.write_text(
+        json.dumps(
+            {
+                "REQ-KV-1": {"text": "   ", "title": "Title based text"},
+                "REQ-KV-2": {"requirement": "Requirement key text"},
+                "REQ-KV-3": "Scalar text",
+                "REQ-KV-4": None,
+            }
+        ),
+        encoding="utf-8",
+    )
+    loaded = load_baseline(dict_json)
+    assert loaded["REQ-KV-1"].text == "Title based text"
+    assert loaded["REQ-KV-2"].text == "Requirement key text"
+    assert loaded["REQ-KV-3"].text == "Scalar text"
+    assert loaded["REQ-KV-4"].text == ""
+
+    # 2. Empty key in dict format must raise ValueError
+    empty_key_json = tmp_path / "empty_key.json"
+    empty_key_json.write_text(json.dumps({"   ": "Invalid empty key"}), encoding="utf-8")
+    with pytest.raises(ValueError, match="empty requirement ID"):
+        load_baseline(empty_key_json)
+
+    # 3. Empty YAML file (yaml.safe_load returns None) must raise ValueError
+    empty_yaml = tmp_path / "empty.yaml"
+    empty_yaml.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError, match="Expected dict or list"):
+        load_baseline(empty_yaml)
+
+    # 4. CSV with whitespace-only trailing rows (both 1-column and multi-column)
+    csv_file = tmp_path / "trailing_ws.csv"
+    csv_file.write_text("id,title\nREQ-CSV-1,CSV Title\n   \n  ,  \n", encoding="utf-8")
+    csv_loaded = load_baseline(csv_file)
+    assert len(csv_loaded) == 1
+    assert csv_loaded["REQ-CSV-1"].text == "CSV Title"
+
+    csv_1col = tmp_path / "single_col.csv"
+    csv_1col.write_text("id\nREQ-1COL\n   \n", encoding="utf-8")
+    csv_1col_loaded = load_baseline(csv_1col)
+    assert list(csv_1col_loaded.keys()) == ["REQ-1COL"]
+
+    # 5. CLI --disallow-orphans without --baseline must fail with exit code 1
+    assert cli_main(["combine", str(tmp_path), "--disallow-orphans"]) == 1
+
+
+def test_shard_stage_sanitisation_and_malformed_jsonl_resilience(tmp_path: Path) -> None:
+    """Verify write_shard sanitises stage names for Windows filenames and read_shards ignores malformed entries."""
+    from pytest_verifies.models import VerificationRecord
+    from pytest_verifies.storage import read_shards, write_shard
+
+    shards_dir = tmp_path / "shards"
+    rec = VerificationRecord(
+        nodeid="tests/test_sample.py::test_one",
+        req_ids=["REQ-SAFE-1"],
+        status="PASSED",
+        stage="ci/linux:py312\\x64",
+    )
+    shard_path = write_shard(shards_dir, stage="ci/linux:py312\\x64", records=[rec])
+    assert shard_path.is_file()
+    assert ":" not in shard_path.name
+    assert "/" not in shard_path.name
+    assert "\\" not in shard_path.name
+
+    # Append malformed lines, non-dict JSON values, invalid duration_s, and null/whitespace fields
+    with shard_path.open("a", encoding="utf-8") as f:
+        f.write("{invalid json\n")
+        f.write("[1, 2, 3]\n")
+        f.write('"just a string"\n')
+        f.write("42\n")
+        f.write(
+            json.dumps(
+                {
+                    "type": "record",
+                    "nodeid": "test_bad_duration",
+                    "req_ids": ["REQ-BAD"],
+                    "status": "PASSED",
+                    "duration_s": "not-a-float",
+                }
+            )
+            + "\n"
+        )
+        f.write(
+            json.dumps(
+                {
+                    "type": "record",
+                    "nodeid": "test_strip_reqs",
+                    "req_ids": ["", "   ", "  REQ-CLEAN-2  "],
+                    "status": "PASSED",
+                    "stage": None,
+                    "location": None,
+                    "step_id": 101,
+                    "timestamp": None,
+                }
+            )
+            + "\n"
+        )
+
+    runs, records = read_shards([shards_dir])
+    assert len(runs) == 1
+    assert runs[0]["stage"] == "ci/linux:py312\\x64"
+    assert len(records) == 2
+    assert records[0].req_ids == ["REQ-SAFE-1"]
+    assert records[1].req_ids == ["REQ-CLEAN-2"]
+    assert records[1].stage == "default"
+    assert records[1].location == ""
+    assert records[1].step_id == "101"
+    assert records[1].timestamp == ""
+
+
+def test_html_partial_filter_and_markdown_table_escaping(tmp_path: Path) -> None:
+    """Verify HTML report includes Partial filter button/logic and Markdown report escapes pipes/newlines."""
+    from pytest_verifies.models import BaselineRequirement, VerificationRecord
+    from pytest_verifies.reporters import generate_html_report, generate_markdown_report
+    from pytest_verifies.storage import consolidate_requirements
+
+    baseline = {
+        "REQ-PIPE-1": BaselineRequirement(
+            id="REQ-PIPE-1",
+            text="Must handle A | B\nand second line",
+        )
+    }
+    records = [
+        VerificationRecord(
+            nodeid="test_mod.py::test_pass",
+            req_ids=["REQ-PIPE-1"],
+            status="PASSED",
+            stage="unit",
+        ),
+        VerificationRecord(
+            nodeid="test_mod.py::test_skip",
+            req_ids=["REQ-PIPE-1"],
+            status="SKIPPED",
+            stage="integration",
+        ),
+        VerificationRecord(
+            nodeid="test_mod.py::test_pass",
+            req_ids=[],
+            step_id="STEP-ACT-1",
+            status="PASSED",
+            description="Step with | pipe\nand newline",
+        ),
+    ]
+
+    report = consolidate_requirements(records, baseline=baseline)
+    assert report.partial_count == 1
+    assert report.requirements[0].is_partial is True
+    assert report.requirements[0].display_status == "PARTIAL"
+
+    html_out = generate_html_report(report)
+    assert 'data-filter="partial">Partial (1)</button>' in html_out
+    assert "status === 'verified' || status === 'partial'" in html_out
+    assert 'data-status="partial"' in html_out
+
+    md_out = generate_markdown_report(report)
+    assert r"Must handle A \| B and second line" in md_out
+    assert r"Step with \| pipe and newline" in md_out

@@ -9,6 +9,11 @@ from pathlib import Path
 from pytest_verifies.models import RTMReport
 
 
+def _escape_md_cell(value: str) -> str:
+    """Escape pipe characters and newlines for safe inclusion in a Markdown table cell."""
+    return value.replace("\r\n", " ").replace("\r", " ").replace("\n", " ").replace("|", r"\|")
+
+
 def generate_markdown_report(report: RTMReport, output_path: str | Path | None = None) -> str:
     """Generate a GitHub Step Summary and PR-ready Markdown document.
 
@@ -57,24 +62,16 @@ def generate_markdown_report(report: RTMReport, output_path: str | Path | None =
     lines.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
 
     for req in report.requirements:
-        if req.status == "FAILED":
-            status_badge = "FAILED"
-        elif req.status == "VERIFIED":
-            is_partial = any(s == "UNVERIFIED" for s in req.stages_verified.values()) or any(
-                r.status == "SKIPPED" for r in req.records
-            )
-            status_badge = "PARTIAL" if is_partial else "VERIFIED"
-        else:
-            status_badge = "UNVERIFIED"
-
+        status_badge = req.display_status
         if req.is_orphan:
             status_badge += " [ORPHAN]"
 
-        text_display = req.text if req.text else "—"
+        text_display = _escape_md_cell(req.text) if req.text else "—"
         in_base_display = "Yes" if req.in_baseline else "No"
         stages_display = (
             ", ".join(
-                f"`{stage}: {status}`" for stage, status in sorted(req.stages_verified.items())
+                f"`{_escape_md_cell(stage)}: {_escape_md_cell(status)}`"
+                for stage, status in sorted(req.stages_verified.items())
             )
             if req.stages_verified
             else "—"
@@ -82,7 +79,7 @@ def generate_markdown_report(report: RTMReport, output_path: str | Path | None =
         tests_display = f"{len(req.verified_by_tests)} test(s)" if req.verified_by_tests else "—"
 
         lines.append(
-            f"| `{req.req_id}` | {text_display} | {status_badge} | {in_base_display} | {stages_display} | {tests_display} |"
+            f"| `{_escape_md_cell(req.req_id)}` | {text_display} | {_escape_md_cell(status_badge)} | {in_base_display} | {stages_display} | {tests_display} |"
         )
     lines.append("")
 
@@ -98,9 +95,12 @@ def generate_markdown_report(report: RTMReport, output_path: str | Path | None =
             if not req.failure_messages and not req.evidence and not req.records:
                 continue
 
+            summary_text = (
+                (req.text or req.status).replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+            )
             lines.append("<details>")
             lines.append(
-                f"<summary><b>{html.escape(req.req_id)}</b> — {html.escape(req.text or req.status)}</summary>"
+                f"<summary><b>{html.escape(req.req_id)}</b> — {html.escape(summary_text)}</summary>"
             )
             lines.append("")
 
@@ -115,7 +115,7 @@ def generate_markdown_report(report: RTMReport, output_path: str | Path | None =
             if req.evidence:
                 lines.append("#### Objective Evidence:")
                 lines.append("```json")
-                lines.append(json.dumps(req.evidence, indent=2))
+                lines.append(json.dumps(req.evidence, indent=2, default=str))
                 lines.append("```")
                 lines.append("")
 
@@ -138,9 +138,12 @@ def generate_markdown_report(report: RTMReport, output_path: str | Path | None =
         lines.append("| Step ID | Test | Status | Description | Duration |")
         lines.append("| :--- | :--- | :--- | :--- | :--- |")
         for ar in action_records:
-            desc = ar.description or "—"
+            desc = _escape_md_cell(ar.description) if ar.description else "—"
+            step_col = _escape_md_cell(ar.step_id or "")
+            node_col = _escape_md_cell(ar.nodeid)
+            status_col = _escape_md_cell(ar.status)
             lines.append(
-                f"| `{ar.step_id}` | `{ar.nodeid}` | {ar.status} | {desc} | {ar.duration_s:.4f}s |"
+                f"| `{step_col}` | `{node_col}` | {status_col} | {desc} | {ar.duration_s:.4f}s |"
             )
         lines.append("")
 

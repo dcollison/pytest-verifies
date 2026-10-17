@@ -18,7 +18,7 @@ def generate_json_report(report: RTMReport, output_path: str | Path | None = Non
     Returns:
         str: Pretty-printed JSON string.
     """
-    content = json.dumps(report.to_dict(), indent=2)
+    content = json.dumps(report.to_dict(), indent=2, default=str)
     if output_path:
         dest = Path(output_path)
         dest.parent.mkdir(parents=True, exist_ok=True)

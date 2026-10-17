@@ -10,8 +10,10 @@ import ast
 import fnmatch
 import inspect
 import textwrap
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any, Generator
+from pathlib import Path
+from typing import Any, Generator, Iterator
 
 import pytest
 
@@ -21,16 +23,31 @@ from pytest_verifies.context import (
     _current_test_nodeid,
     _current_test_stage,
     _global_soft,
+    _has_action_soft_failure,
+    _last_unhandled_req_exc,
     _soft_failures,
+    flatten_req_ids,
 )
-from pytest_verifies.models import BaselineRequirement, VerificationRecord
+from pytest_verifies.models import BaselineRequirement, RTMReport, VerificationRecord
 from pytest_verifies.reporters import (
     generate_csv_report,
     generate_html_report,
     generate_json_report,
     generate_markdown_report,
+    render_console_summary,
 )
 from pytest_verifies.storage import consolidate_requirements, write_shard
+
+
+def _get_stage(config: pytest.Config) -> str:
+    """Resolve the active execution stage from CLI option or ini configuration."""
+    stage = config.getoption("verifies_stage") or config.getini("verifies_stage") or "default"
+    return str(stage).strip() or "default"
+
+
+def _get_soft(config: pytest.Config) -> bool:
+    """Resolve whether global soft assertion mode is enabled."""
+    return bool(config.getoption("verifies_soft", default=False) or config.getini("verifies_soft"))
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -59,7 +76,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     group.addoption(
         "--verifies-stage",
         action="store",
-        default="default",
+        default=None,
         help="Test execution stage label (e.g. 'unit', 'integration', 'system'). Default: 'default'.",
     )
     parser.addini(
@@ -129,19 +146,33 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
+def _extract_ast_strings(node: ast.AST) -> set[str]:
+    """Extract non-empty string literals from an AST Constant or collection node."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        val = node.value.strip()
+        return {val} if val else set()
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        result: set[str] = set()
+        for elt in node.elts:
+            result.update(_extract_ast_strings(elt))
+        return result
+    return set()
+
+
 def extract_requirements_from_item(item: pytest.Item) -> set[str]:
     """Extract linked requirement IDs from item markers and AST inspection of function body."""
     extracted: set[str] = set()
 
     # 1. Markers (captures @verifies(...) and pytest.param(..., marks=verifies(...)))
     for marker in item.iter_markers(name="verifies"):
-        for arg in marker.args:
-            if isinstance(arg, str) and arg.strip():
-                extracted.add(arg.strip())
-            elif isinstance(arg, (list, tuple, set)):
-                for sub in arg:
-                    if isinstance(sub, str) and sub.strip():
-                        extracted.add(sub.strip())
+        extracted.update(
+            flatten_req_ids(
+                *marker.args,
+                marker.kwargs.get("verifies"),
+                marker.kwargs.get("req_ids"),
+                marker.kwargs.get("req_id"),
+            )
+        )
 
     # 2. Fast AST inspection of item.obj
     fn = getattr(item, "obj", None)
@@ -150,46 +181,36 @@ def extract_requirements_from_item(item: pytest.Item) -> set[str]:
             source = inspect.getsource(fn)
             tree = ast.parse(textwrap.dedent(source))
             for node in ast.walk(tree):
-                if isinstance(node, ast.With):
-                    for with_item in node.items:
-                        expr = with_item.context_expr
-                        if isinstance(expr, ast.Call):
-                            func_name = None
-                            if isinstance(expr.func, ast.Name):
-                                func_name = expr.func.id
-                            elif isinstance(expr.func, ast.Attribute):
-                                func_name = expr.func.attr
-                            if func_name in ("verifies", "step"):
-                                args_to_check = expr.args[1:] if func_name == "step" else expr.args
-                                for arg in args_to_check:
-                                    if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                                        val = arg.value.strip()
-                                        if val:
-                                            extracted.add(val)
-                                    elif isinstance(arg, (ast.List, ast.Tuple)):
-                                        for elt in arg.elts:
-                                            if isinstance(elt, ast.Constant) and isinstance(
-                                                elt.value, str
-                                            ):
-                                                val = elt.value.strip()
-                                                if val:
-                                                    extracted.add(val)
-                                for kw in expr.keywords:
-                                    if kw.arg in ("req_id", "req_ids", "verifies"):
-                                        if isinstance(kw.value, ast.Constant) and isinstance(
-                                            kw.value.value, str
-                                        ):
-                                            val = kw.value.value.strip()
-                                            if val:
-                                                extracted.add(val)
-                                        elif isinstance(kw.value, (ast.List, ast.Tuple)):
-                                            for elt in kw.value.elts:
-                                                if isinstance(elt, ast.Constant) and isinstance(
-                                                    elt.value, str
-                                                ):
-                                                    val = elt.value.strip()
-                                                    if val:
-                                                        extracted.add(val)
+                if not isinstance(node, (ast.With, ast.AsyncWith)):
+                    continue
+                for with_item in node.items:
+                    expr = with_item.context_expr
+                    if not isinstance(expr, ast.Call):
+                        continue
+                    func_name = (
+                        expr.func.id
+                        if isinstance(expr.func, ast.Name)
+                        else expr.func.attr
+                        if isinstance(expr.func, ast.Attribute)
+                        else None
+                    )
+                    if func_name == "verifies":
+                        for arg in expr.args:
+                            extracted.update(_extract_ast_strings(arg))
+                    elif func_name == "step":
+                        if len(expr.args) >= 2 and not (
+                            isinstance(expr.args[1], ast.Constant)
+                            and isinstance(expr.args[1].value, str)
+                        ):
+                            extracted.update(_extract_ast_strings(expr.args[1]))
+                        for arg in expr.args[2:]:
+                            extracted.update(_extract_ast_strings(arg))
+                    else:
+                        continue
+
+                    for kw in expr.keywords:
+                        if kw.arg in ("req_id", "req_ids", "verifies"):
+                            extracted.update(_extract_ast_strings(kw.value))
         except (OSError, TypeError, SyntaxError):
             pass
 
@@ -209,14 +230,14 @@ class VerifiesControllerPlugin:
         self.config = config
         self.baseline_map = baseline_map
         self.buffer: list[VerificationRecord] = []
+        self.report: RTMReport | None = None
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
         """Harvest verification records from user_properties transmitted by worker or local run."""
         if hasattr(self.config, "workerinput"):
             return
 
-        is_setup_skip_or_fail = report.when == "setup" and (report.skipped or report.failed)
-        if report.when != "call" and not is_setup_skip_or_fail:
+        if report.when not in ("setup", "call", "teardown"):
             return
 
         for name, value in report.user_properties:
@@ -227,16 +248,12 @@ class VerifiesControllerPlugin:
 
     def pytest_sessionfinish(self, session: pytest.Session, exitstatus: int) -> None:
         """Write execution shard and evaluate quality gates on the controller node."""
-        if hasattr(session.config, "workerinput"):
+        if hasattr(session.config, "workerinput") or session.config.getoption("collectonly"):
             return
 
         # 1. Write execution shard if requested
         out_dir = session.config.getoption("verifies_out") or session.config.getini("verifies_out")
-        stage = (
-            session.config.getoption("verifies_stage", default="default")
-            or session.config.getini("verifies_stage")
-            or "default"
-        )
+        stage = _get_stage(session.config)
 
         if out_dir:
             write_shard(
@@ -245,7 +262,7 @@ class VerifiesControllerPlugin:
                 records=self.buffer,
             )
 
-        # 2. Check direct reporting flags or quality gate checks
+        # 2. Check direct reporting flags and quality gate checks
         json_out = session.config.getoption("verifies_json")
         csv_out = session.config.getoption("verifies_csv")
         md_out = session.config.getoption("verifies_md")
@@ -253,12 +270,20 @@ class VerifiesControllerPlugin:
         fail_under = session.config.getoption("verifies_fail_under")
         disallow_orphans = session.config.getoption("verifies_disallow_orphans")
 
-        has_report_request = bool(
-            json_out or csv_out or md_out or html_out or (fail_under is not None)
+        should_consolidate = bool(
+            self.buffer
+            or self.baseline_map
+            or json_out
+            or csv_out
+            or md_out
+            or html_out
+            or (fail_under is not None)
+            or disallow_orphans
         )
 
-        if has_report_request:
+        if should_consolidate:
             report = consolidate_requirements(self.buffer, baseline=self.baseline_map)
+            self.report = report
 
             if json_out:
                 generate_json_report(report, json_out)
@@ -284,7 +309,10 @@ class VerifiesControllerPlugin:
             if fail_under is not None and report.coverage_percentage < fail_under:
                 gate_failed = True
 
-            if gate_failed:
+            if gate_failed and session.exitstatus in (
+                pytest.ExitCode.OK,
+                pytest.ExitCode.NO_TESTS_COLLECTED,
+            ):
                 session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
     def pytest_terminal_summary(
@@ -294,87 +322,18 @@ class VerifiesControllerPlugin:
         config: pytest.Config,
     ) -> None:
         """Render a clean, coloured console summary table respecting --color options."""
-        if hasattr(self.config, "workerinput"):
+        if hasattr(self.config, "workerinput") or config.getoption("collectonly"):
             return
 
         # Do not print if no requirements were tracked or baselined
         if not self.buffer and not self.baseline_map:
             return
 
-        report = consolidate_requirements(self.buffer, baseline=self.baseline_map)
+        report = self.report or consolidate_requirements(self.buffer, baseline=self.baseline_map)
         if not report.requirements:
             return
 
-        terminalreporter.write_sep("=", "Requirements Traceability Matrix (RTM)", bold=True)
-        header = (
-            f"{'Requirement ID':<20} {'Status':<12} {'Stages':<22} {'Tests':>5}  Requirement Text"
-        )
-        terminalreporter.write_line(header, bold=True)
-        terminalreporter.write_line("-" * len(header))
-
-        partial_count = 0
-        for req in report.requirements:
-            if req.status == "FAILED":
-                status_text = "FAILED"
-                status_color = {"red": True, "bold": True}
-            elif req.status == "VERIFIED":
-                is_partial = any(s == "UNVERIFIED" for s in req.stages_verified.values()) or any(
-                    r.status == "SKIPPED" for r in req.records
-                )
-                if is_partial:
-                    status_text = "PARTIAL"
-                    status_color = {"yellow": True, "bold": True}
-                    partial_count += 1
-                else:
-                    status_text = "VERIFIED"
-                    status_color = {"green": True, "bold": True}
-            else:
-                status_text = "UNVERIFIED"
-                status_color = {"cyan": True}
-
-            if req.is_orphan:
-                status_text += " [ORPHAN]"
-
-            stages_str = (
-                ", ".join(f"{s}:{st}" for s, st in sorted(req.stages_verified.items())) or "-"
-            )
-            if len(stages_str) > 21:
-                stages_str = stages_str[:18] + "..."
-
-            test_count_str = str(len(req.verified_by_tests))
-
-            terminalreporter.write(f"{req.req_id:<20} ")
-            terminalreporter.write(f"{status_text:<12} ", **status_color)
-            terminalreporter.write(f"{stages_str:<22} ")
-            terminalreporter.write(f"{test_count_str:>5}  ")
-            terminalreporter.write_line(req.text or "")
-
-        terminalreporter.write_line("-" * len(header))
-        total_reqs = report.total_baseline_requirements or report.total_observed_requirements
-        v_pct = f"{report.coverage_percentage:.1f}%"
-        terminalreporter.write(f"Total: {total_reqs} | ")
-        terminalreporter.write(
-            f"Verified: {report.verified_count} ({v_pct}) | ", green=True, bold=True
-        )
-        terminalreporter.write(
-            f"Failed: {report.failed_count} | ",
-            red=(report.failed_count > 0),
-            bold=(report.failed_count > 0),
-        )
-        terminalreporter.write(
-            f"Partial: {partial_count} | ",
-            yellow=(partial_count > 0),
-            bold=(partial_count > 0),
-        )
-        terminalreporter.write(
-            f"Unverified: {report.unverified_count} | ",
-            cyan=(report.unverified_count > 0),
-        )
-        terminalreporter.write_line(
-            f"Orphans: {report.orphan_count}",
-            yellow=(report.orphan_count > 0),
-        )
-        terminalreporter.write_sep("=", bold=True)
+        render_console_summary(report, terminalreporter)
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -458,43 +417,112 @@ def pytest_collection_modifyitems(
             config.hook.pytest_deselected(items=deselected)
 
 
-@pytest.hookimpl(hookwrapper=True)
-def pytest_runtest_call(item: pytest.Item) -> Generator[None, Any, None]:
-    """Execute test call inside isolated context and check for soft verification failures."""
-    stage = (
-        item.config.getoption("verifies_stage", default="default")
-        or item.config.getini("verifies_stage")
-        or "default"
-    )
-    is_soft = bool(
-        item.config.getoption("verifies_soft", default=False) or item.config.getini("verifies_soft")
-    )
+@contextmanager
+def _ensure_test_context(item: pytest.Item) -> Iterator[None]:
+    """Ensure context variables are initialised for the given test item."""
+    if _current_test_nodeid.get() == item.nodeid:
+        yield
+        return
 
     token_nodeid = _current_test_nodeid.set(item.nodeid)
-    token_stage = _current_test_stage.set(stage)
-    token_soft = _global_soft.set(is_soft)
+    token_stage = _current_test_stage.set(_get_stage(item.config))
+    token_soft = _global_soft.set(_get_soft(item.config))
     token_records = _active_records.set([])
     token_failures = _soft_failures.set([])
-
+    token_last_exc = _last_unhandled_req_exc.set(None)
+    token_action_soft = _has_action_soft_failure.set(False)
     try:
-        outcome = yield
-        if outcome.excinfo is None:
-            failures = _soft_failures.get()
-            if failures:
-                summary = f"Soft verification failure(s) ({len(failures)}):\n" + "\n\n".join(
-                    failures
-                )
-                pytest.fail(summary, pytrace=False)
+        yield
     finally:
-        item._verifies_harvested_records = list(_active_records.get())  # type: ignore[attr-defined]
         _current_test_nodeid.reset(token_nodeid)
         _current_test_stage.reset(token_stage)
         _global_soft.reset(token_soft)
         _active_records.reset(token_records)
         _soft_failures.reset(token_failures)
+        _last_unhandled_req_exc.reset(token_last_exc)
+        _has_action_soft_failure.reset(token_action_soft)
+
+
+def _run_phase_wrapper(item: pytest.Item) -> Generator[None, Any, None]:
+    """Execute a test phase (setup, call, or teardown) and harvest records and soft failures."""
+    with _ensure_test_context(item):
+        _last_unhandled_req_exc.set(None)
+        _has_action_soft_failure.set(False)
+        item._verifies_phase_failed_by_req_block = False  # type: ignore[attr-defined]
+        try:
+            outcome = yield
+            failures = list(_soft_failures.get())
+            _soft_failures.get().clear()
+            if outcome.excinfo is not None:
+                last_req_exc = _last_unhandled_req_exc.get()
+                item._verifies_phase_failed_by_req_block = (  # type: ignore[attr-defined]
+                    last_req_exc is not None and outcome.excinfo[1] is last_req_exc
+                )
+            elif failures:
+                item._verifies_phase_failed_by_req_block = not _has_action_soft_failure.get()  # type: ignore[attr-defined]
+                summary = f"Soft verification failure(s) ({len(failures)}):\n" + "\n\n".join(
+                    failures
+                )
+                pytest.fail(summary, pytrace=False)
+        finally:
+            _soft_failures.get().clear()
+            _last_unhandled_req_exc.set(None)
+            _has_action_soft_failure.set(False)
+            harvested = list(_active_records.get())
+            _active_records.get().clear()
+            item._verifies_harvested_records = harvested  # type: ignore[attr-defined]
 
 
 @pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_protocol(
+    item: pytest.Item,
+    nextitem: pytest.Item | None,
+) -> Generator[None, Any, None]:
+    """Manage verification context variables across the entire test protocol (setup, call, teardown)."""
+    item._verifies_harvested_records = []  # type: ignore[attr-defined]
+    item._verifies_evaluated_req_ids = set()  # type: ignore[attr-defined]
+    item._verifies_failed_req_ids = set()  # type: ignore[attr-defined]
+    item._verifies_phase_failed_by_req_block = False  # type: ignore[attr-defined]
+    with _ensure_test_context(item):
+        yield
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_setup(item: pytest.Item) -> Generator[None, Any, None]:
+    """Execute test setup inside isolated context and check for soft verification failures."""
+    yield from _run_phase_wrapper(item)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_call(item: pytest.Item) -> Generator[None, Any, None]:
+    """Execute test call inside isolated context and check for soft verification failures."""
+    yield from _run_phase_wrapper(item)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_teardown(item: pytest.Item) -> Generator[None, Any, None]:
+    """Execute test teardown inside isolated context and check for soft verification failures."""
+    yield from _run_phase_wrapper(item)
+
+
+def _resolve_report_status(report: pytest.TestReport) -> str:
+    """Resolve verification record status from a pytest TestReport."""
+    if hasattr(report, "wasxfail"):
+        if report.skipped:
+            return "XFAILED"
+        if report.passed:
+            return "XPASS"
+        return "FAILED"
+    if report.passed:
+        return "PASSED"
+    if report.failed:
+        return "FAILED"
+    if report.skipped:
+        return "SKIPPED"
+    return "ERROR"
+
+
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
 def pytest_runtest_makereport(
     item: pytest.Item,
     call: pytest.CallInfo[Any],
@@ -503,107 +531,152 @@ def pytest_runtest_makereport(
     outcome = yield
     report: pytest.TestReport = outcome.get_result()
 
-    is_setup_skip_or_fail = report.when == "setup" and (report.skipped or report.failed)
-    if report.when != "call" and not is_setup_skip_or_fail:
+    # 1. Harvest block-level records recorded via with verifies(...) / with step(...)
+    records: list[VerificationRecord] = list(getattr(item, "_verifies_harvested_records", []))
+    item._verifies_harvested_records = []  # type: ignore[attr-defined]
+
+    is_setup_active = report.when == "setup" and (report.failed or report.skipped or bool(records))
+    is_call_active = report.when == "call"
+    is_teardown_active = report.when == "teardown" and (
+        report.failed or report.skipped or bool(records)
+    )
+    if not (is_setup_active or is_call_active or is_teardown_active):
         return report
 
-    stage = (
-        item.config.getoption("verifies_stage", default="default")
-        or item.config.getini("verifies_stage")
-        or "default"
-    )
+    stage = _get_stage(item.config)
+    m_status = _resolve_report_status(report)
+    is_phase_failure = m_status in ("FAILED", "ERROR", "XFAILED")
+    msg: str | None = None
+    if is_phase_failure:
+        msg = getattr(report, "longreprtext", None) or (
+            str(report.longrepr) if report.longrepr else None
+        )
+        if not msg and hasattr(report, "wasxfail"):
+            msg = f"xfail: {report.wasxfail}" if report.wasxfail else "XFailed"
 
-    # 1. Harvest block-level records recorded via with verifies(...)
-    records: list[VerificationRecord] = list(getattr(item, "_verifies_harvested_records", []))
-    evaluated_req_ids = {rid for r in records for rid in r.req_ids}
+    # Downgrade block PASSED records if test failed due to strict xfail ([XPASS(strict)])
+    if (
+        report.when == "call"
+        and report.failed
+        and (call.excinfo is None or hasattr(report, "wasxfail"))
+    ):
+        for r in records:
+            if r.status in ("PASSED", "XPASS"):
+                r.status = "FAILED"
+                if not r.message and msg:
+                    r.message = msg
 
-    # 2. Harvest marker-based requirements
+    item_evaluated_req_ids: set[str] = getattr(item, "_verifies_evaluated_req_ids", set())
+    item_failed_req_ids: set[str] = getattr(item, "_verifies_failed_req_ids", set())
+
+    phase_evaluated_req_ids = {rid for r in records for rid in r.req_ids}
+    phase_failed_req_ids = {
+        rid for r in records if r.status in ("FAILED", "ERROR", "XFAILED") for rid in r.req_ids
+    }
+    item_evaluated_req_ids.update(phase_evaluated_req_ids)
+    item_failed_req_ids.update(phase_failed_req_ids)
+
+    failure_from_req_block = bool(
+        getattr(item, "_verifies_phase_failed_by_req_block", False)
+    ) and bool(phase_failed_req_ids)
+
     loc = (
-        f"{item.location[0]}:{item.location[1] + 1}"
+        f"{Path(item.location[0]).as_posix()}:{item.location[1] + 1}"
         if hasattr(item, "location") and item.location and item.location[1] is not None
         else item.nodeid
     )
 
-    for marker in item.iter_markers(name="verifies"):
-        marker_req_ids: list[str] = []
-        for arg in marker.args:
-            if isinstance(arg, str) and arg.strip():
-                marker_req_ids.append(arg.strip())
-            elif isinstance(arg, (list, tuple, set)):
-                for sub in arg:
-                    if isinstance(sub, str) and sub.strip():
-                        marker_req_ids.append(sub.strip())
+    # 2. Harvest marker-based requirements when appropriate for the phase
+    should_evaluate_markers = (report.when == "call") or (
+        report.when in ("setup", "teardown") and (is_phase_failure or m_status == "SKIPPED")
+    )
 
-        desc = marker.kwargs.get("description")
-        ev = marker.kwargs.get("evidence")
-        step_id = marker.kwargs.get("step_id") or marker.kwargs.get("step")
-
-        if hasattr(report, "wasxfail"):
-            if report.skipped:
-                m_status = "XFAILED"
-            elif report.passed:
-                m_status = "XPASS"
-            else:
-                m_status = "FAILED"
-        elif report.passed:
-            m_status = "PASSED"
-        elif report.failed:
-            m_status = "FAILED"
-        elif report.skipped:
-            m_status = "SKIPPED"
-        else:
-            m_status = "ERROR"
-
-        msg = None
-        if m_status in ("FAILED", "ERROR", "XFAILED"):
-            msg = getattr(report, "longreprtext", None) or (
-                str(report.longrepr) if report.longrepr else None
+    if should_evaluate_markers:
+        for marker in item.iter_markers(name="verifies"):
+            marker_req_ids = flatten_req_ids(
+                *marker.args,
+                marker.kwargs.get("verifies"),
+                marker.kwargs.get("req_ids"),
+                marker.kwargs.get("req_id"),
             )
+            desc = marker.kwargs.get("description")
+            ev = marker.kwargs.get("evidence")
+            step_id = marker.kwargs.get("step_id") or marker.kwargs.get("step")
 
-        if not marker_req_ids and step_id:
-            m_record = VerificationRecord(
-                nodeid=item.nodeid,
-                req_ids=[],
-                status=m_status,
-                stage=stage,
-                step_id=step_id,
-                location=loc,
-                description=desc,
-                message=msg,
-                evidence=ev,
-                duration_s=getattr(report, "duration", 0.0),
-                timestamp=datetime.now(timezone.utc).isoformat(),
+            if not marker_req_ids and step_id:
+                m_record = VerificationRecord(
+                    nodeid=item.nodeid,
+                    req_ids=[],
+                    status=m_status,
+                    stage=stage,
+                    step_id=step_id,
+                    location=loc,
+                    description=desc,
+                    message=msg,
+                    evidence=ev,
+                    duration_s=getattr(report, "duration", 0.0),
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                )
+                records.append(m_record)
+
+            for req_id in marker_req_ids:
+                if req_id in item_failed_req_ids:
+                    continue
+                if req_id in item_evaluated_req_ids and (
+                    not is_phase_failure or failure_from_req_block
+                ):
+                    continue
+
+                m_record = VerificationRecord(
+                    nodeid=item.nodeid,
+                    req_ids=[req_id],
+                    status=m_status,
+                    stage=stage,
+                    step_id=step_id,
+                    location=loc,
+                    description=desc,
+                    message=msg,
+                    evidence=ev,
+                    duration_s=getattr(report, "duration", 0.0),
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                )
+                records.append(m_record)
+                item_evaluated_req_ids.add(req_id)
+                if is_phase_failure:
+                    item_failed_req_ids.add(req_id)
+
+        # If a phase failed outside any requirement block, invalidate requirements evaluated in this phase (or setup/call on teardown)
+        if is_phase_failure and not failure_from_req_block:
+            candidate_reqs = (
+                item_evaluated_req_ids if report.when == "teardown" else phase_evaluated_req_ids
             )
-            records.append(m_record)
+            for req_id in sorted(candidate_reqs - item_failed_req_ids):
+                records.append(
+                    VerificationRecord(
+                        nodeid=item.nodeid,
+                        req_ids=[req_id],
+                        status=m_status,
+                        stage=stage,
+                        location=loc,
+                        message=msg,
+                        duration_s=getattr(report, "duration", 0.0),
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                    )
+                )
+                item_failed_req_ids.add(req_id)
 
-        for req_id in marker_req_ids:
-            if report.passed and req_id in evaluated_req_ids:
-                continue
-
-            m_record = VerificationRecord(
-                nodeid=item.nodeid,
-                req_ids=[req_id],
-                status=m_status,
-                stage=stage,
-                step_id=step_id,
-                location=loc,
-                description=desc,
-                message=msg,
-                evidence=ev,
-                duration_s=getattr(report, "duration", 0.0),
-                timestamp=datetime.now(timezone.utc).isoformat(),
-            )
-            records.append(m_record)
-            evaluated_req_ids.add(req_id)
+    item._verifies_evaluated_req_ids = item_evaluated_req_ids  # type: ignore[attr-defined]
+    item._verifies_failed_req_ids = item_failed_req_ids  # type: ignore[attr-defined]
 
     # 3. JUnit XML & xdist property injection
-    user_props: list[tuple[str, Any]] = [("verifies_records", [r.to_dict() for r in records])]
+    if records:
+        report.user_properties.append(("verifies_records", [r.to_dict() for r in records]))
     unique_req_ids = sorted({rid for r in records for rid in r.req_ids})
     for req_id in unique_req_ids:
-        user_props.append(("verifies", req_id))
-
-    report.user_properties.extend(user_props)
-    if hasattr(item, "user_properties"):
-        item.user_properties.extend(user_props)
+        prop = ("verifies", req_id)
+        if prop not in report.user_properties:
+            report.user_properties.append(prop)
+        if hasattr(item, "user_properties") and prop not in item.user_properties:
+            item.user_properties.append(prop)
 
     return report

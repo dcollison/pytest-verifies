@@ -17,6 +17,7 @@ from pytest_verifies.reporters import (
     generate_html_report,
     generate_json_report,
     generate_markdown_report,
+    render_console_summary,
 )
 from pytest_verifies.storage import consolidate_requirements, read_shards
 
@@ -98,6 +99,13 @@ def combine_command(args: argparse.Namespace) -> int:
     Returns:
         int: Exit status code (0 for success, 1 for quality gate failure).
     """
+    if args.disallow_orphans and not args.baseline:
+        print(
+            "Error: --disallow-orphans requires --baseline to be specified.",
+            file=sys.stderr,
+        )
+        return 1
+
     baseline_map: dict[str, BaselineRequirement] | None = None
     if args.baseline:
         try:
@@ -138,70 +146,7 @@ def combine_command(args: argparse.Namespace) -> int:
     elif getattr(args, "color", "auto") == "no":
         tw.hasmarkup = False
 
-    tw.sep("=", "Requirements Traceability Matrix (RTM)", bold=True)
-    header = f"{'Requirement ID':<20} {'Status':<12} {'Stages':<22} {'Tests':>5}  Requirement Text"
-    tw.line(header, bold=True)
-    tw.line("-" * len(header))
-
-    partial_count = 0
-    for req in report.requirements:
-        if req.status == "FAILED":
-            status_text = "FAILED"
-            status_color = {"red": True, "bold": True}
-        elif req.status == "VERIFIED":
-            is_partial = any(s == "UNVERIFIED" for s in req.stages_verified.values()) or any(
-                r.status == "SKIPPED" for r in req.records
-            )
-            if is_partial:
-                status_text = "PARTIAL"
-                status_color = {"yellow": True, "bold": True}
-                partial_count += 1
-            else:
-                status_text = "VERIFIED"
-                status_color = {"green": True, "bold": True}
-        else:
-            status_text = "UNVERIFIED"
-            status_color = {"cyan": True}
-
-        if req.is_orphan:
-            status_text += " [ORPHAN]"
-
-        stages_str = ", ".join(f"{s}:{st}" for s, st in sorted(req.stages_verified.items())) or "-"
-        if len(stages_str) > 21:
-            stages_str = stages_str[:18] + "..."
-
-        test_count_str = str(len(req.verified_by_tests))
-
-        tw.write(f"{req.req_id:<20} ")
-        tw.write(f"{status_text:<12} ", **status_color)
-        tw.write(f"{stages_str:<22} ")
-        tw.write(f"{test_count_str:>5}  ")
-        tw.line(req.text or "")
-
-    tw.line("-" * len(header))
-    total_reqs = report.total_baseline_requirements or report.total_observed_requirements
-    v_pct = f"{report.coverage_percentage:.1f}%"
-    tw.write(f"Total: {total_reqs} | ")
-    tw.write(f"Verified: {report.verified_count} ({v_pct}) | ", green=True, bold=True)
-    tw.write(
-        f"Failed: {report.failed_count} | ",
-        red=(report.failed_count > 0),
-        bold=(report.failed_count > 0),
-    )
-    tw.write(
-        f"Partial: {partial_count} | ",
-        yellow=(partial_count > 0),
-        bold=(partial_count > 0),
-    )
-    tw.write(
-        f"Unverified: {report.unverified_count} | ",
-        cyan=(report.unverified_count > 0),
-    )
-    tw.line(
-        f"Orphans: {report.orphan_count}",
-        yellow=(report.orphan_count > 0),
-    )
-    tw.sep("=", bold=True)
+    render_console_summary(report, tw)
 
     # Quality Gate Checks
     exit_code = 0
