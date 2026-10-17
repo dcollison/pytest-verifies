@@ -24,15 +24,15 @@
 from pytest_verifies import verifies
 
 
-@verifies("REQ-FRUIT-001", description="Apples must be red and crunchy")
-def test_apple_crunch():
-    apple = {"colour": "red", "crunch_score": 9.5}
-    assert apple["crunch_score"] >= 8.0
+@verifies("REQ-DOG-001", description="Dogs must be able to bark")
+def test_dog_bark():
+    dog = {"name": "Buster", "sound": "woof"}
+    assert dog["sound"] == "woof"
 
 
-def test_puppy_happiness():
-    with verifies("REQ-PUPPY-001", soft=True, evidence={"belly_rubs": 10}) as ctx:
-        tail_wags_per_min = 120
-        ctx.attach("tail_wags_per_min", tail_wags_per_min)
-        assert tail_wags_per_min > 60
+def test_cat_contentment():
+    with verifies("REQ-CAT-001", soft=True, evidence={"chin_scratches": 5}) as ctx:
+        purr_db = 45
+        ctx.attach("purr_volume_db", purr_db)
+        assert purr_db > 30
 ```

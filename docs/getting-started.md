@@ -26,12 +26,12 @@ Create a requirements manifest `requirements.json` (or `.csv` / `.yaml`):
 {
   "requirements": [
     {
-      "id": "REQ-FRUIT-001",
-      "text": "Apples must be crisp and sweet"
+      "id": "REQ-DOG-001",
+      "text": "Dogs must wag their tails when happy"
     },
     {
-      "id": "REQ-ANIMAL-001",
-      "text": "Dogs must wag their tails when happy"
+      "id": "REQ-CAT-001",
+      "text": "Cats must purr when content"
     }
   ]
 }
@@ -39,22 +39,22 @@ Create a requirements manifest `requirements.json` (or `.csv` / `.yaml`):
 
 ### 2. Annotate Your Pytest Tests
 
-In `tests/test_orchard.py`:
+In `tests/test_pets.py`:
 
 ```python
 from pytest_verifies import verifies
 
 
-@verifies("REQ-FRUIT-001")
-def test_apple_crispness():
-    apple = {"variety": "Honeycrisp", "crisp": True}
-    assert apple["crisp"] is True
-
-
+@verifies("REQ-DOG-001")
 def test_happy_dog():
-    with verifies("REQ-ANIMAL-001"):
-        dog = {"name": "Buster", "tail_wagging": True}
-        assert dog["tail_wagging"] is True
+    dog = {"name": "Buster", "tail_wagging": True}
+    assert dog["tail_wagging"] is True
+
+
+def test_content_cat():
+    with verifies("REQ-CAT-001"):
+        cat = {"name": "Whiskers", "purring": True}
+        assert cat["purring"] is True
 ```
 
 ### 3. Run Pytest with Report Generation

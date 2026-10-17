@@ -23,13 +23,15 @@ def test_retriever_temperament():
 When decorating a test class, all test methods within the class automatically inherit verification tracking for the specified requirements:
 
 ```python
-@verifies("REQ-DUCK-001")
-class TestDuckBehaviour:
-    def test_quack(self):
-        assert "quack" == "quack"
+@verifies("REQ-CAT-001")
+class TestCatAgility:
+    def test_land_on_feet(self):
+        cat = {"lands_on_feet": True}
+        assert cat["lands_on_feet"] is True
 
-    def test_waddle(self):
-        assert True
+    def test_silent_stalking(self):
+        cat = {"stealthy": True}
+        assert cat["stealthy"] is True
 ```
 
 ---
@@ -42,15 +44,15 @@ Use `with verifies(...)` for statement-level or multi-block verification:
 from pytest_verifies import verifies
 
 
-def test_fruit_basket():
+def test_dog_and_cat_habits():
     # Single-line check
-    with verifies("REQ-FRUIT-001"):
-        assert "banana" != "orange"
+    with verifies("REQ-DOG-001"):
+        assert "bark" != "meow"
 
     # Multi-statement block
-    with verifies("REQ-FRUIT-002", description="Lemons must be appropriately sour"):
-        lemon_sourness = 9
-        assert lemon_sourness > 5
+    with verifies("REQ-CAT-002", description="Cats take multiple naps per day"):
+        nap_count = 5
+        assert nap_count >= 3
 ```
 
 ---
@@ -89,17 +91,17 @@ Audit frameworks require verifiable proof of test outcomes. Objective evidence c
 from pytest_verifies import verifies
 
 
-def test_zoo_snack_time():
+def test_dog_fetch_telemetry():
     # Static evidence dictionary
-    with verifies("REQ-PANDA-001", evidence={"favourite_food": "bamboo", "eaten_kg": 12}):
+    with verifies("REQ-DOG-001", evidence={"breed": "Labrador", "good_boy": True}):
         assert True
 
     # Dynamic attachment during runtime
-    with verifies("REQ-MONKEY-001") as ctx:
-        bananas_eaten = 5
-        ctx.attach("bananas_eaten", bananas_eaten)
-        ctx.record_evidence({"snack_type": "ripe banana"})
-        assert bananas_eaten >= 3
+    with verifies("REQ-DOG-002") as ctx:
+        balls_fetched = 7
+        ctx.attach("balls_fetched", balls_fetched)
+        ctx.record_evidence({"tail_wagging": True})
+        assert balls_fetched >= 5
 ```
 
 ---
@@ -108,7 +110,7 @@ def test_zoo_snack_time():
 
 Test specifications often define explicit **Step IDs** (e.g. `STEP-01`, `1.1`), which fall into two categories:
 
-1. **Action Steps (Setup / Preparation):** Prepare ingredients or configure state without directly validating a requirement.
+1. **Action Steps (Setup / Preparation):** Perform setup or state changes without directly validating a requirement.
 2. **Verification Steps:** Directly assert behaviour against one or more requirements.
 
 Import `step` alongside `verifies`:
@@ -117,27 +119,28 @@ Import `step` alongside `verifies`:
 from pytest_verifies import step, verifies
 
 
-def test_fruit_salad_recipe():
-    # 1. Action Step: Prepare ingredients without verifying a requirement
-    with step("STEP-01", description="Chop watermelon and peel bananas"):
-        salad_bowl = ["watermelon", "banana"]
+def test_puppy_training_routine():
+    # 1. Action Step: Prepare treats and call puppy
+    with step("STEP-01", description="Fill treat pouch and call puppy"):
+        puppy = {"name": "Buster", "tricks": []}
 
     # 2. Action Step with Telemetry Evidence
-    with step("STEP-02", description="Add fresh berries to bowl") as s:
-        salad_bowl.extend(["strawberry", "blueberry"])
-        s.attach("berry_count", 2)
+    with step("STEP-02", description="Offer treat to puppy") as s:
+        puppy["tricks"].append("sit")
+        s.attach("treats_given", 1)
 
     # 3. Verification Step using step(..., verifies=...)
     with step(
         "STEP-03",
-        description="Verify fruit salad contains at least 3 fruits",
-        verifies="REQ-SALAD-001",
+        description="Verify puppy sits on command",
+        verifies="REQ-DOG-003",
     ):
-        assert len(salad_bowl) >= 3
+        assert "sit" in puppy["tricks"]
 
     # 4. Verification Step using verifies(..., step=...)
-    with verifies("REQ-SALAD-002", step="STEP-04", description="Verify watermelon is in the bowl"):
-        assert "watermelon" in salad_bowl
+    with verifies("REQ-DOG-002", step="STEP-04", description="Verify puppy wags tail when praised"):
+        puppy_happy = True
+        assert puppy_happy is True
 ```
 
 ### Benefits of Step Tracking

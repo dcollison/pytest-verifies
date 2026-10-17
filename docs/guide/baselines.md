@@ -16,12 +16,12 @@ Supports array format or top-level dictionary:
 {
   "requirements": [
     {
-      "id": "REQ-FRUIT-001",
-      "text": "Apples must be crisp and delicious"
+      "id": "REQ-DOG-001",
+      "text": "Dogs must be able to bark"
     },
     {
-      "id": "REQ-ANIMAL-001",
-      "text": "All dogs must be good boys and able to bark"
+      "id": "REQ-CAT-001",
+      "text": "Cats must be able to purr when content"
     }
   ]
 }
@@ -31,8 +31,8 @@ Or as a compact dictionary:
 
 ```json
 {
-  "REQ-FRUIT-001": "Apples must be crisp and delicious",
-  "REQ-ANIMAL-001": "All dogs must be good boys and able to bark"
+  "REQ-DOG-001": "Dogs must be able to bark",
+  "REQ-CAT-001": "Cats must be able to purr when content"
 }
 ```
 
@@ -42,8 +42,8 @@ Requires an `id` column header (case-insensitive), paired with `text` (or `descr
 
 ```csv
 id,text
-REQ-FRUIT-001,Apples must be crisp and delicious
-REQ-ANIMAL-001,All dogs must be good boys and able to bark
+REQ-DOG-001,Dogs must be able to bark
+REQ-CAT-001,Cats must be able to purr when content
 ```
 
 ### 3. YAML (`requirements.yaml`)
@@ -52,10 +52,10 @@ Requires `pyyaml` (installed automatically if using `docs` or `dev` dependency g
 
 ```yaml
 requirements:
-  - id: REQ-FRUIT-001
-    text: Apples must be crisp and delicious
-  - id: REQ-ANIMAL-001
-    text: All dogs must be good boys and able to bark
+  - id: REQ-DOG-001
+    text: Dogs must be able to bark
+  - id: REQ-CAT-001
+    text: Cats must be able to purr when content
 ```
 
 ---

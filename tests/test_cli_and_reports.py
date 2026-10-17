@@ -24,11 +24,11 @@ def test_baseline_loader_formats(tmp_path: Path) -> None:
                 "requirements": [
                     {
                         "id": "REQ-001",
-                        "text": "Apples must be crisp and delicious",
+                        "text": "Dogs must be able to bark",
                     },
                     {
                         "id": "REQ-002",
-                        "text": "Bananas must be yellow and sweet",
+                        "text": "Cats must be able to purr",
                     },
                 ]
             }
@@ -37,40 +37,40 @@ def test_baseline_loader_formats(tmp_path: Path) -> None:
     )
     base_json = load_baseline(json_path)
     assert len(base_json) == 2
-    assert base_json["REQ-001"].text == "Apples must be crisp and delicious"
-    assert base_json["REQ-002"].text == "Bananas must be yellow and sweet"
+    assert base_json["REQ-001"].text == "Dogs must be able to bark"
+    assert base_json["REQ-002"].text == "Cats must be able to purr"
 
     # 2. CSV Format with id and text
     csv_path = tmp_path / "baseline.csv"
     csv_path.write_text(
         "id,text\n"
-        "REQ-003,Strawberries must be fragrant and red\n"
-        "REQ-004,Pineapples must wear a leafy crown\n",
+        "REQ-003,Puppies must take afternoon naps\n"
+        "REQ-004,Kittens must chase yarn balls\n",
         encoding="utf-8",
     )
     base_csv = load_baseline(csv_path)
     assert len(base_csv) == 2
-    assert base_csv["REQ-003"].text == "Strawberries must be fragrant and red"
-    assert base_csv["REQ-004"].text == "Pineapples must wear a leafy crown"
+    assert base_csv["REQ-003"].text == "Puppies must take afternoon naps"
+    assert base_csv["REQ-004"].text == "Kittens must chase yarn balls"
 
     # CSV with alternative 'description' header
     csv_desc_path = tmp_path / "baseline_desc.csv"
     csv_desc_path.write_text(
-        "id,description\nREQ-005,Blueberries must be round and juicy\n",
+        "id,description\nREQ-005,Dogs must wag their tails\n",
         encoding="utf-8",
     )
     base_desc = load_baseline(csv_desc_path)
-    assert base_desc["REQ-005"].text == "Blueberries must be round and juicy"
+    assert base_desc["REQ-005"].text == "Dogs must wag their tails"
 
     # 3. YAML Format
     yaml_path = tmp_path / "baseline.yaml"
     yaml_path.write_text(
-        "requirements:\n  - id: REQ-006\n    text: Mangoes must be golden and sweet\n",
+        "requirements:\n  - id: REQ-006\n    text: Cats must land on their feet\n",
         encoding="utf-8",
     )
     base_yaml = load_baseline(yaml_path)
     assert len(base_yaml) == 1
-    assert base_yaml["REQ-006"].text == "Mangoes must be golden and sweet"
+    assert base_yaml["REQ-006"].text == "Cats must land on their feet"
 
     # 4. Error cases
     non_existent = tmp_path / "missing.json"
@@ -95,10 +95,10 @@ def test_multi_run_shard_combining_and_stage_consolidation(pytester: pytest.Pyte
                 "requirements": [
                     {
                         "id": "REQ-001",
-                        "text": "Apples must be crisp and sweet",
+                        "text": "Dogs must be able to bark",
                     },
-                    {"id": "REQ-002", "text": "Bananas must be yellow and ripe"},
-                    {"id": "REQ-003", "text": "Watermelons must be sweet and juicy"},
+                    {"id": "REQ-002", "text": "Dogs must wag their tails"},
+                    {"id": "REQ-003", "text": "Cats must be able to purr"},
                 ]
             }
         ),
@@ -133,7 +133,7 @@ def test_multi_run_shard_combining_and_stage_consolidation(pytester: pytest.Pyte
 
         def test_system_req1():
             with verifies("REQ-001"):
-                assert False, "Watermelon dropped on the kitchen floor during picnic prep"
+                assert False, "Puppy distracted by butterfly during park test"
         """
     )
     result_system = pytester.runpytest(
@@ -173,7 +173,7 @@ def test_multi_run_shard_combining_and_stage_consolidation(pytester: pytest.Pyte
     assert reqs["REQ-001"]["status"] == "FAILED"
     assert reqs["REQ-001"]["stages_verified"] == {"unit": "VERIFIED", "system": "FAILED"}
     assert len(reqs["REQ-001"]["failure_messages"]) == 1
-    assert "Watermelon dropped on the kitchen floor" in reqs["REQ-001"]["failure_messages"][0]
+    assert "Puppy distracted by butterfly" in reqs["REQ-001"]["failure_messages"][0]
 
     # REQ-002 passed in unit -> overall consolidated status VERIFIED
     assert reqs["REQ-002"]["status"] == "VERIFIED"
@@ -207,7 +207,7 @@ def test_multi_run_shard_combining_and_stage_consolidation(pytester: pytest.Pyte
     assert "# Requirements Traceability Matrix (RTM)" in md_content
     assert "## Summary Scorecard" in md_content
     assert "REQ-001" in md_content
-    assert "Watermelon dropped on the kitchen floor" in md_content
+    assert "Puppy distracted by butterfly" in md_content
 
     # Verify HTML output
     assert html_out.is_file()
@@ -224,7 +224,7 @@ def test_cli_disallow_orphans_quality_gate(pytester: pytest.Pytester) -> None:
     shards_dir = pytester.path / "shards"
     baseline_file = pytester.path / "baseline.json"
     baseline_file.write_text(
-        json.dumps({"requirements": [{"id": "REQ-VALID-01", "text": "Golden delicious apple"}]}),
+        json.dumps({"requirements": [{"id": "REQ-VALID-01", "text": "Dogs must bark"}]}),
         encoding="utf-8",
     )
 
@@ -342,7 +342,7 @@ def test_console_summary_color_and_partial(pytester: pytest.Pytester) -> None:
             {
                 "requirements": [
                     {"id": "REQ-PASS", "text": "Happy golden retriever"},
-                    {"id": "REQ-FAIL", "text": "Grumpy garden badger"},
+                    {"id": "REQ-FAIL", "text": "Grumpy guard dog"},
                     {"id": "REQ-PART", "text": "Curious ginger kitten"},
                 ]
             }

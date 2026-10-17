@@ -15,20 +15,20 @@ def test_step_action_and_verification_context(pytester: pytest.Pytester) -> None
         from pytest_verifies import step, verifies
 
         def test_mixed_steps():
-            # 1. Action step: Prepare bowl
-            with step("STEP-01", description="Prepare fruit bowl") as s1:
-                s1.attach("bowl_ready", True)
+            # 1. Action step: Prepare play area
+            with step("STEP-01", description="Prepare puppy play area") as s1:
+                s1.attach("leash_ready", True)
                 status = "ready"
                 assert status == "ready"
 
             # 2. Verification step using step(..., verifies=...)
-            with step("STEP-02", description="Verify apple is crisp", verifies="REQ-FRUIT-001"):
+            with step("STEP-02", description="Verify puppy comes when called", verifies="REQ-DOG-001"):
                 assert 200 == 200
 
             # 3. Verification step using verifies(..., step=...)
-            with verifies("REQ-FRUIT-002", step="STEP-03", description="Verify banana is sweet"):
-                sweetness = 50
-                assert sweetness > 0
+            with verifies("REQ-DOG-002", step="STEP-03", description="Verify puppy wags tail"):
+                tail_wag_speed = 50
+                assert tail_wag_speed > 0
         """
     )
 
@@ -53,17 +53,17 @@ def test_step_action_and_verification_context(pytester: pytest.Pytester) -> None
     assert records[0]["step_id"] == "STEP-01"
     assert records[0]["req_ids"] == []
     assert records[0]["status"] == "PASSED"
-    assert records[0]["description"] == "Prepare fruit bowl"
-    assert records[0]["evidence"] == {"bowl_ready": True}
+    assert records[0]["description"] == "Prepare puppy play area"
+    assert records[0]["evidence"] == {"leash_ready": True}
 
     # Record 2: Verification step via step(...)
     assert records[1]["step_id"] == "STEP-02"
-    assert records[1]["req_ids"] == ["REQ-FRUIT-001"]
+    assert records[1]["req_ids"] == ["REQ-DOG-001"]
     assert records[1]["status"] == "PASSED"
 
     # Record 3: Verification step via verifies(...)
     assert records[2]["step_id"] == "STEP-03"
-    assert records[2]["req_ids"] == ["REQ-FRUIT-002"]
+    assert records[2]["req_ids"] == ["REQ-DOG-002"]
     assert records[2]["status"] == "PASSED"
 
 
@@ -75,15 +75,15 @@ def test_step_failure_and_soft_assertions(pytester: pytest.Pytester) -> None:
 
         def test_soft_steps():
             # Soft action step fails; execution continues
-            with step("STEP-01", description="Slice watermelon", soft=True):
-                assert False, "Watermelon dropped on the floor!"
+            with step("STEP-01", description="Fetch tennis ball", soft=True):
+                assert False, "Tennis ball lost under sofa!"
 
             # Soft verification step fails; execution continues
-            with step("STEP-02", description="Taste test lemon", verifies="REQ-FRUIT-001", soft=True):
-                assert False, "Lemon was unexpectedly sweet!"
+            with step("STEP-02", description="Verify puppy barks on command", verifies="REQ-DOG-001", soft=True):
+                assert False, "Puppy distracted by butterfly!"
 
             # Passing step
-            with step("STEP-03", description="Wipe cutting board"):
+            with step("STEP-03", description="Reward puppy with belly rub"):
                 assert True
         """
     )
@@ -92,9 +92,9 @@ def test_step_failure_and_soft_assertions(pytester: pytest.Pytester) -> None:
     result.assert_outcomes(failed=1)
     stdout = result.stdout.str()
     assert "[ACTION] [Step: STEP-01]" in stdout
-    assert "Watermelon dropped on the floor!" in stdout
-    assert "[REQ-FRUIT-001] [Step: STEP-02]" in stdout
-    assert "Lemon was unexpectedly sweet!" in stdout
+    assert "Tennis ball lost under sofa!" in stdout
+    assert "[REQ-DOG-001] [Step: STEP-02]" in stdout
+    assert "Puppy distracted by butterfly!" in stdout
 
 
 def test_step_reporting_and_combiner(pytester: pytest.Pytester) -> None:
@@ -105,8 +105,8 @@ def test_step_reporting_and_combiner(pytester: pytest.Pytester) -> None:
             {
                 "requirements": [
                     {
-                        "id": "REQ-FRUIT-001",
-                        "text": "Apples must be crisp and delicious",
+                        "id": "REQ-DOG-001",
+                        "text": "Dogs must be able to bark",
                     }
                 ]
             }
@@ -119,10 +119,10 @@ def test_step_reporting_and_combiner(pytester: pytest.Pytester) -> None:
         from pytest_verifies import step
 
         def test_protocol():
-            with step("STEP-INIT", description="Wash fruit under tap"):
+            with step("STEP-INIT", description="Call puppy to training mat"):
                 assert True
 
-            with step("STEP-CHECK", description="Inspect apple for freshness", verifies="REQ-FRUIT-001"):
+            with step("STEP-CHECK", description="Verify puppy barks on command", verifies="REQ-DOG-001"):
                 assert True
         """
     )

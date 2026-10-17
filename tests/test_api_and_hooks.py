@@ -209,14 +209,14 @@ def test_dynamic_evidence_attachment(pytester: pytest.Pytester) -> None:
         """
         from pytest_verifies import verifies
 
-        def test_zoo_snacks():
+        def test_puppy_metrics():
             # Static evidence passed into verifies
-            with verifies("REQ-EV-1", evidence={"apples_eaten": 4, "crisp": True}):
+            with verifies("REQ-EV-1", evidence={"treats_eaten": 4, "happy": True}):
                 assert True
 
             # Dynamic attachment via ctx.attach and ctx.record_evidence
             with verifies("REQ-EV-2") as ctx:
-                ctx.attach("favorite_fruit", "banana")
+                ctx.attach("favorite_toy", "squeaky bone")
                 ctx.record_evidence({"tail_wagging": True})
                 assert True
         """
@@ -236,18 +236,18 @@ def test_dynamic_evidence_attachment(pytester: pytest.Pytester) -> None:
     data = json.loads(json_path.read_text(encoding="utf-8"))
     reqs = {r["req_id"]: r for r in data["requirements"]}
 
-    assert reqs["REQ-EV-1"]["evidence"] == [{"apples_eaten": 4, "crisp": True}]
-    assert reqs["REQ-EV-2"]["evidence"] == [{"favorite_fruit": "banana", "tail_wagging": True}]
+    assert reqs["REQ-EV-1"]["evidence"] == [{"treats_eaten": 4, "happy": True}]
+    assert reqs["REQ-EV-2"]["evidence"] == [{"favorite_toy": "squeaky bone", "tail_wagging": True}]
 
     # Verify evidence in Markdown report
     md_text = md_path.read_text(encoding="utf-8")
-    assert "apples_eaten" in md_text
-    assert "favorite_fruit" in md_text
-    assert "banana" in md_text
+    assert "treats_eaten" in md_text
+    assert "favorite_toy" in md_text
+    assert "squeaky bone" in md_text
 
     # Verify evidence in HTML report
     html_text = html_path.read_text(encoding="utf-8")
-    assert "apples_eaten" in html_text
+    assert "treats_eaten" in html_text
     assert "tail_wagging" in html_text
 
 

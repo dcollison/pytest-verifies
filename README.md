@@ -70,10 +70,10 @@ Verify fine-grained inline statements while preserving full assertion diffs:
 from pytest_verifies import verifies
 
 
-def test_apple_ripeness():
-    apple = {"variety": "Honeycrisp", "colour": "red", "sweetness": 8}
-    with verifies("REQ-FRUIT-001"):
-        assert apple["colour"] == "red"
+def test_cat_purring():
+    cat = {"name": "Whiskers", "purring": True}
+    with verifies("REQ-CAT-001"):
+        assert cat["purring"] is True
 ```
 
 ### 3.3 Soft Assertions & Objective Evidence
@@ -84,24 +84,23 @@ Evaluate multiple requirements within a single test execution without early term
 from pytest_verifies import verifies
 
 
-def test_fruit_basket_quality():
-    banana = {"colour": "yellow", "spots": 2}
-    kiwi = {"fuzzy": True, "sweetness_brix": 14.5}
+def test_dog_health_and_energy():
+    dog = {"name": "Buster", "happy": True, "tail_wags_per_min": 120}
 
     # Block 1: Soft assertion with static objective evidence
     with verifies(
-        "REQ-FRUIT-002",
-        description="Bananas must be yellow when ready to eat",
+        "REQ-DOG-002",
+        description="Dogs must wag their tails when happy",
         soft=True,
-        evidence={"banana_spots": banana["spots"], "ready": True},
+        evidence={"dog_name": dog["name"], "happy": dog["happy"]},
     ):
-        assert banana["colour"] == "yellow"
+        assert dog["happy"] is True
 
     # Block 2: Execution continues even if Block 1 fails
-    with verifies("REQ-FRUIT-003", soft=True) as ctx:
-        ctx.attach("sweetness_brix", kiwi["sweetness_brix"])
-        ctx.record_evidence({"variety": "Golden Kiwi"})
-        assert kiwi["sweetness_brix"] > 12.0
+    with verifies("REQ-DOG-003", soft=True) as ctx:
+        ctx.attach("tail_wags_per_min", dog["tail_wags_per_min"])
+        ctx.record_evidence({"breed": "Golden Retriever"})
+        assert dog["tail_wags_per_min"] > 60
 ```
 
 ### 3.4 Parametrised Tests
@@ -114,16 +113,16 @@ from pytest_verifies import verifies
 
 
 @pytest.mark.parametrize(
-    "fruit,expected_colour",
+    "animal,sound",
     [
-        pytest.param("banana", "yellow", marks=verifies("REQ-FRUIT-001")),
-        pytest.param("apple", "red", marks=verifies("REQ-FRUIT-002")),
-        pytest.param("lime", "green", marks=verifies("REQ-FRUIT-003")),
+        pytest.param("dog", "woof", marks=verifies("REQ-DOG-001")),
+        pytest.param("cat", "meow", marks=verifies("REQ-CAT-001")),
+        pytest.param("puppy", "yip", marks=verifies("REQ-DOG-001")),
     ],
 )
-def test_fruit_colours(fruit, expected_colour):
-    fruit_colours = {"banana": "yellow", "apple": "red", "lime": "green"}
-    assert fruit_colours[fruit] == expected_colour
+def test_pet_sounds(animal, sound):
+    pet_sounds = {"dog": "woof", "cat": "meow", "puppy": "yip"}
+    assert pet_sounds[animal] == sound
 ```
 
 ### 3.5 Test Procedure Steps & Action Steps
@@ -134,21 +133,20 @@ Test protocols often require tracking discrete step IDs (`STEP-01`, `1.1`), incl
 from pytest_verifies import step, verifies
 
 
-def test_fruit_salad_preparation():
-    # Action step: Prepare ingredients without verifying a requirement
-    with step("STEP-01", description="Chop watermelon and peel bananas"):
-        bowl = ["watermelon", "banana"]
-        bowl.append("strawberries")
+def test_puppy_training_routine():
+    # Action step: Prepare treat and call puppy
+    with step("STEP-01", description="Fill treat pouch and call puppy"):
+        puppy = {"name": "Buster", "tricks": []}
 
-    # Verification step: Directly validates REQ-SALAD-001
-    with step(
-        "STEP-02", description="Verify fruit salad has at least 3 fruits", verifies="REQ-SALAD-001"
-    ):
-        assert len(bowl) >= 3
+    # Verification step: Directly validates REQ-DOG-004
+    with step("STEP-02", description="Verify puppy sits on command", verifies="REQ-DOG-004"):
+        puppy["tricks"].append("sit")
+        assert "sit" in puppy["tricks"]
 
     # Verification step with verifies(..., step=...)
-    with verifies("REQ-SALAD-002", step="STEP-03", description="Verify strawberries are present"):
-        assert "strawberries" in bowl
+    with verifies("REQ-DOG-002", step="STEP-03", description="Verify puppy wags tail after treat"):
+        tail_wagging = True
+        assert tail_wagging is True
 ```
 
 ---
@@ -157,7 +155,7 @@ def test_fruit_salad_preparation():
 
 | Option | Ini Configuration | Description |
 | :--- | :--- | :--- |
-| `--req="PATTERN"` | — | Comma-separated requirement IDs or glob patterns to filter tests (e.g. `--req="REQ-FRUIT-*,REQ-ANIMAL-001"`). |
+| `--req="PATTERN"` | — | Comma-separated requirement IDs or glob patterns to filter tests (e.g. `--req="REQ-DOG-*,REQ-CAT-001"`). |
 | `--verifies-out=DIR` | `verifies_out = DIR` | Directory to output `.jsonl` execution shards. |
 | `--verifies-stage=NAME` | `verifies_stage = NAME` | Stage label for execution shard (default: `"default"`). |
 | `--verifies-baseline=PATH` | `verifies_baseline = PATH` | Path to baseline requirement manifest (`.json`, `.csv`, `.yaml`). |
@@ -180,12 +178,12 @@ Baseline manifests declare formal specifications against which automated tests a
 {
   "requirements": [
     {
-      "id": "REQ-FRUIT-001",
-      "text": "Apples must be crisp and delicious"
+      "id": "REQ-DOG-001",
+      "text": "Dogs must be able to bark"
     },
     {
-      "id": "REQ-ANIMAL-001",
-      "text": "All dogs must be good boys and able to bark"
+      "id": "REQ-CAT-001",
+      "text": "Cats must be able to purr when content"
     }
   ]
 }
@@ -194,17 +192,17 @@ Baseline manifests declare formal specifications against which automated tests a
 ### CSV Manifest (`requirements.csv`)
 ```csv
 id,text
-REQ-FRUIT-001,Apples must be crisp and delicious
-REQ-ANIMAL-001,All dogs must be good boys and able to bark
+REQ-DOG-001,Dogs must be able to bark
+REQ-CAT-001,Cats must be able to purr when content
 ```
 
 ### YAML Manifest (`requirements.yaml`)
 ```yaml
 requirements:
-  - id: REQ-FRUIT-001
-    text: Apples must be crisp and delicious
-  - id: REQ-ANIMAL-001
-    text: All dogs must be good boys and able to bark
+  - id: REQ-DOG-001
+    text: Dogs must be able to bark
+  - id: REQ-CAT-001
+    text: Cats must be able to purr when content
 ```
 
 ---
