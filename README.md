@@ -56,10 +56,10 @@ Decorate test functions or classes to associate them with one or more requiremen
 from pytest_verifies import verifies
 
 
-@verifies("REQ-PWR-001", "REQ-PWR-002", description="Power rail voltage tolerance")
-def test_voltage_limits():
-    measured_v = 5.01
-    assert 4.95 <= measured_v <= 5.05
+@verifies("REQ-AUTH-001", "REQ-AUTH-002", description="User token format and expiration")
+def test_jwt_claims():
+    payload = {"sub": "user_42", "exp": 1893456000}
+    assert payload["exp"] > 1700000000
 ```
 
 ### 3.2 Single-Line Context Manager
@@ -70,10 +70,10 @@ Verify fine-grained inline statements while preserving full assertion diffs:
 from pytest_verifies import verifies
 
 
-def test_network_packet():
-    packet = {"protocol": "TCP", "port": 443}
-    with verifies("REQ-NET-010"):
-        assert packet["port"] == 443
+def test_api_endpoint():
+    response = {"status": 200, "content_type": "application/json"}
+    with verifies("REQ-API-010"):
+        assert response["status"] == 200
 ```
 
 ### 3.3 Soft Assertions & Objective Evidence
@@ -84,24 +84,24 @@ Evaluate multiple requirements within a single test execution without early term
 from pytest_verifies import verifies
 
 
-def test_environmental_limits():
-    ambient_temp_c = 72.4
-    core_voltage_v = 1.18
+def test_user_registration():
+    email = "developer@example.com"
+    request_latency_ms = 45.2
 
     # Block 1: Soft assertion with static objective evidence
     with verifies(
-        "REQ-ENV-001",
-        description="Operating temperature under 85 °C",
+        "REQ-USER-001",
+        description="Valid email address required",
         soft=True,
-        evidence={"ambient_temp_c": ambient_temp_c, "limit_c": 85.0},
+        evidence={"email": email, "format": "RFC 5322"},
     ):
-        assert ambient_temp_c < 85.0
+        assert "@" in email and email.endswith(".com")
 
-    # Block 2: Execution continues even if REQ-ENV-001 fails
-    with verifies("REQ-PWR-003", soft=True) as ctx:
-        ctx.attach("core_voltage_v", core_voltage_v)
-        ctx.record_evidence({"calibration_offset": 0.02})
-        assert 1.15 <= core_voltage_v <= 1.25
+    # Block 2: Execution continues even if REQ-USER-001 fails
+    with verifies("REQ-PERF-001", soft=True) as ctx:
+        ctx.attach("request_latency_ms", request_latency_ms)
+        ctx.record_evidence({"cache_hit": True})
+        assert request_latency_ms < 100.0
 ```
 
 ### 3.4 Parametrised Tests
@@ -114,39 +114,39 @@ from pytest_verifies import verifies
 
 
 @pytest.mark.parametrize(
-    "baud_rate",
+    "discount_code,expected_rate",
     [
-        pytest.param(9600, marks=verifies("REQ-COM-001")),
-        pytest.param(115200, marks=verifies("REQ-COM-002")),
+        pytest.param("SUMMER10", 0.10, marks=verifies("REQ-PROMO-001")),
+        pytest.param("VIP25", 0.25, marks=verifies("REQ-PROMO-002")),
     ],
 )
-def test_serial_baud(baud_rate):
-    assert baud_rate in (9600, 115200)
+def test_promo_discount_rates(discount_code, expected_rate):
+    assert discount_code in ("SUMMER10", "VIP25")
+    assert expected_rate > 0.0
 ```
 
 ### 3.5 Test Procedure Steps & Action Steps
 
-Formal test protocols often require tracking discrete step IDs (`STEP-01`, `1.1`), including pure **Action Steps** (stimulus/setup) and **Verification Steps** (checking requirements):
+Formal test protocols often require tracking discrete step IDs (`STEP-01`, `1.1`), including pure **Action Steps** (setup/fixtures) and **Verification Steps** (checking requirements):
 
 ```python
 from pytest_verifies import step, verifies
 
 
-def test_motor_speed_control():
-    # Action step: Setup stimulus without validating a requirement
-    with step("STEP-01", description="Power on inverter and spin motor"):
-        inverter.power_on()
-        motor.set_target_rpm(3000)
+def test_order_checkout_flow():
+    # Action step: Setup mock state without validating a requirement
+    with step("STEP-01", description="Seed customer cart and catalog items"):
+        cart.add_item("item_123", quantity=2)
+        cart.apply_promo("WELCOME10")
 
-    # Verification step: Directly validates REQ-MOT-001
-    with step(
-        "STEP-02", description="Verify steady-state RPM within +/- 1%", verifies="REQ-MOT-001"
-    ):
-        assert 2970 <= motor.measured_rpm <= 3030
+    # Verification step: Directly validates REQ-CART-001
+    with step("STEP-02", description="Verify discount calculation", verifies="REQ-CART-001"):
+        assert cart.total_gbp == 90.0
 
     # Verification step with verifies(..., step=...)
-    with verifies("REQ-MOT-002", step="STEP-03", description="Verify current draw under load"):
-        assert motor.current_draw_a < 15.0
+    with verifies("REQ-PAY-002", step="STEP-03", description="Verify payment charge idempotency"):
+        charge = payment_gateway.create_charge(idempotency_key="key_abc123")
+        assert charge.status == "SUCCEEDED"
 ```
 
 ---
@@ -155,7 +155,7 @@ def test_motor_speed_control():
 
 | Option | Ini Configuration | Description |
 | :--- | :--- | :--- |
-| `--req="PATTERN"` | — | Comma-separated requirement IDs or glob patterns to filter tests (e.g. `--req="REQ-PWR-*,REQ-COM-001"`). |
+| `--req="PATTERN"` | — | Comma-separated requirement IDs or glob patterns to filter tests (e.g. `--req="REQ-AUTH-*,REQ-PAY-001"`). |
 | `--verifies-out=DIR` | `verifies_out = DIR` | Directory to output `.jsonl` execution shards. |
 | `--verifies-stage=NAME` | `verifies_stage = NAME` | Stage label for execution shard (default: `"default"`). |
 | `--verifies-baseline=PATH` | `verifies_baseline = PATH` | Path to baseline requirement manifest (`.json`, `.csv`, `.yaml`). |
@@ -171,7 +171,7 @@ def test_motor_speed_control():
 
 ## 5. Baseline Requirement Manifests
 
-Baseline manifests declare formal specifications against which automated tests are verified. Baseline requirements need only an `id` and a requirement statement `text` (or `description` / `title` / `requirement` interchangeably).
+Baseline manifests declare formal specifications against which automated tests are verified. Baseline requirements need only an `id` and a requirement statement `text` (or `description`).
 
 ### JSON Manifest (`requirements.json`)
 ```json
@@ -179,11 +179,11 @@ Baseline manifests declare formal specifications against which automated tests a
   "requirements": [
     {
       "id": "REQ-001",
-      "text": "System shall maintain 5.0 V +/- 2%"
+      "text": "Authenticate users using JWT bearer tokens"
     },
     {
       "id": "REQ-002",
-      "text": "Thermal cutoff threshold at 85 °C"
+      "text": "Rate limiter must throttle exceeding 100 requests per minute"
     }
   ]
 }
@@ -192,17 +192,17 @@ Baseline manifests declare formal specifications against which automated tests a
 ### CSV Manifest (`requirements.csv`)
 ```csv
 id,text
-REQ-001,System shall maintain 5.0 V +/- 2%
-REQ-002,Thermal cutoff threshold at 85 °C
+REQ-001,Authenticate users using JWT bearer tokens
+REQ-002,Rate limiter must throttle exceeding 100 requests per minute
 ```
 
 ### YAML Manifest (`requirements.yaml`)
 ```yaml
 requirements:
   - id: REQ-001
-    text: System shall maintain 5.0 V +/- 2%
+    text: Authenticate users using JWT bearer tokens
   - id: REQ-002
-    text: Thermal cutoff threshold at 85 °C
+    text: Rate limiter must throttle exceeding 100 requests per minute
 ```
 
 ---
@@ -219,7 +219,7 @@ uv run pytest tests/unit --verifies-out=.verifies --verifies-stage=unit
 # Integration test tier
 uv run pytest tests/integration --verifies-out=.verifies --verifies-stage=integration
 
-# Hardware-in-the-loop / System test tier
+# End-to-end / System test tier
 uv run pytest tests/system --verifies-out=.verifies --verifies-stage=system
 ```
 

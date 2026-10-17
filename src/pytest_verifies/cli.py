@@ -139,7 +139,7 @@ def combine_command(args: argparse.Namespace) -> int:
         tw.hasmarkup = False
 
     tw.sep("=", "Requirements Traceability Matrix (RTM)", bold=True)
-    header = f"{'Requirement ID':<20} {'Status':<12} {'Stages':<22} {'Tests':>5}  Title"
+    header = f"{'Requirement ID':<20} {'Status':<12} {'Stages':<22} {'Tests':>5}  Requirement Text"
     tw.line(header, bold=True)
     tw.line("-" * len(header))
 
@@ -176,7 +176,7 @@ def combine_command(args: argparse.Namespace) -> int:
         tw.write(f"{status_text:<12} ", **status_color)
         tw.write(f"{stages_str:<22} ")
         tw.write(f"{test_count_str:>5}  ")
-        tw.line(req.title or "")
+        tw.line(req.text or "")
 
     tw.line("-" * len(header))
     total_reqs = report.total_baseline_requirements or report.total_observed_requirements

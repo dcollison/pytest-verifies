@@ -17,33 +17,9 @@ class BaselineRequirement:
     id: str
     text: str = ""
 
-    def __init__(
-        self,
-        id: str,
-        text: str = "",
-        description: str = "",
-        title: str = "",
-    ) -> None:
-        self.id = id.strip()
-        self.text = (text or description or title or "").strip()
-
-    @property
-    def description(self) -> str:
-        """Alias for text for backwards compatibility."""
-        return self.text
-
-    @description.setter
-    def description(self, val: str) -> None:
-        self.text = val.strip()
-
-    @property
-    def title(self) -> str:
-        """Alias for text for backwards compatibility."""
-        return self.text
-
-    @title.setter
-    def title(self, val: str) -> None:
-        self.text = val.strip()
+    def __post_init__(self) -> None:
+        self.id = self.id.strip()
+        self.text = self.text.strip()
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise baseline requirement to a dictionary."""
@@ -57,13 +33,7 @@ class BaselineRequirement:
         """Deserialise baseline requirement from a dictionary."""
         return cls(
             id=str(data.get("id", "")).strip(),
-            text=str(
-                data.get("text")
-                or data.get("description")
-                or data.get("title")
-                or data.get("requirement")
-                or ""
-            ).strip(),
+            text=str(data.get("text") or data.get("description", "")).strip(),
         )
 
 
@@ -182,24 +152,6 @@ class ConsolidatedRequirement:
     verified_by_tests: list[str] = field(default_factory=list)
     evidence: list[Any] = field(default_factory=list)
     failure_messages: list[str] = field(default_factory=list)
-
-    @property
-    def description(self) -> str:
-        """Alias for text for backwards compatibility."""
-        return self.text
-
-    @description.setter
-    def description(self, val: str) -> None:
-        self.text = val
-
-    @property
-    def title(self) -> str:
-        """Alias for text for backwards compatibility."""
-        return self.text
-
-    @title.setter
-    def title(self, val: str) -> None:
-        self.text = val
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise consolidated requirement to a dictionary."""

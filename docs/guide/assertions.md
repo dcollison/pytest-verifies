@@ -14,20 +14,20 @@ Use `@verifies(...)` on test functions or test classes:
 from pytest_verifies import verifies
 
 
-@verifies("REQ-SYS-001", "REQ-SYS-002", description="Subsystem boot sequence")
-def test_subsystem_boot():
+@verifies("REQ-AUTH-001", "REQ-AUTH-002", description="Authentication service init")
+def test_auth_service_init():
     assert True
 ```
 
 When decorating a test class, all test methods within the class automatically inherit verification tracking for the specified requirements:
 
 ```python
-@verifies("REQ-COMMS-001")
-class TestSerialComms:
-    def test_parity(self):
+@verifies("REQ-USER-001")
+class TestUserService:
+    def test_create_user(self):
         assert True
 
-    def test_stop_bits(self):
+    def test_delete_user(self):
         assert True
 ```
 
@@ -41,23 +41,23 @@ Use `with verifies(...)` for statement-level or multi-block verification:
 from pytest_verifies import verifies
 
 
-def test_packet_flow():
+def test_jwt_claims():
     # Single-line check
-    with verifies("REQ-NET-001"):
+    with verifies("REQ-AUTH-001"):
         assert 1 == 1
 
     # Multi-statement block
-    with verifies("REQ-NET-002", description="Payload checksum validation"):
-        calculated_crc = 0xABCD
-        expected_crc = 0xABCD
-        assert calculated_crc == expected_crc
+    with verifies("REQ-AUTH-002", description="Payload signature validation"):
+        issuer = "https://auth.example.com"
+        token = {"iss": issuer, "exp": 1893456000}
+        assert token["iss"] == issuer
 ```
 
 ---
 
 ## 3. Soft Assertions
 
-In standard Pytest execution, the first failed assertion aborts the test function. In engineering verification, it is often necessary to check several independent safety limits even if an earlier check fails.
+In standard Pytest execution, the first failed assertion aborts the test function. In software testing, it is often desirable to check several independent validations within a single test without aborting after the first failure.
 
 Enable soft assertions per block with `soft=True`, or globally across all blocks with `--verifies-soft`:
 
@@ -65,16 +65,16 @@ Enable soft assertions per block with `soft=True`, or globally across all blocks
 from pytest_verifies import verifies
 
 
-def test_safety_envelope():
+def test_user_profile_validation():
     # Block 1 fails softly; execution continues!
-    with verifies("REQ-LIM-001", soft=True):
-        assert 10 > 20
+    with verifies("REQ-VAL-001", soft=True):
+        assert 10 > 20, "Age below required threshold"
 
     # Block 2 executes and records VERIFIED
-    with verifies("REQ-LIM-002", soft=True):
-        assert 50 == 50
+    with verifies("REQ-VAL-002", soft=True):
+        assert "user@example.com".endswith(".com")
 
-    # At the end of test_safety_envelope, Pytest consolidates failures and fails the test.
+    # At the end of test_user_profile_validation, Pytest consolidates failures and fails the test.
 ```
 
 ---
@@ -87,26 +87,26 @@ Audit frameworks require verifiable proof of test outcomes. Objective evidence c
 from pytest_verifies import verifies
 
 
-def test_sensor_telemetry():
+def test_payment_processing():
     # Static evidence dictionary
-    with verifies("REQ-SNS-001", evidence={"sensor_model": "BMP390", "calibrated": True}):
+    with verifies("REQ-PAY-001", evidence={"gateway": "Stripe", "currency": "GBP"}):
         assert True
 
     # Dynamic attachment during runtime
-    with verifies("REQ-SNS-002") as ctx:
-        measured_pressure_hpa = 1013.25
-        ctx.attach("pressure_hpa", measured_pressure_hpa)
-        ctx.record_evidence({"drift_pct": 0.01})
-        assert measured_pressure_hpa > 900.0
+    with verifies("REQ-PAY-002") as ctx:
+        latency_ms = 45.2
+        ctx.attach("latency_ms", latency_ms)
+        ctx.record_evidence({"idempotency_key": "idem_123456"})
+        assert latency_ms < 100.0
 ```
 
 ---
 
 ## 5. Test Procedure Steps & Action Steps
 
-In formal engineering verification (such as ISO 26262, IEC 62304, or DO-178C test protocols), test specifications define explicit **Step IDs** (e.g. `STEP-01`, `1.1`). These steps fall into two categories:
+In formal test protocols (such as enterprise verification, SOC2, or regulated software delivery), test specifications define explicit **Step IDs** (e.g. `STEP-01`, `1.1`). These steps fall into two categories:
 
-1. **Action Steps (Stimulus / Setup):** Perform state transitions, calibration, or stimulus without directly validating a requirement.
+1. **Action Steps (Setup / Operation):** Perform state transitions, database seeding, or API calls without directly validating a requirement.
 2. **Verification Steps:** Directly assert system behaviour against one or more requirements.
 
 Import `step` alongside `verifies`:
@@ -115,27 +115,29 @@ Import `step` alongside `verifies`:
 from pytest_verifies import step, verifies
 
 
-def test_battery_depletion_sequence():
+def test_user_checkout_journey():
     # 1. Pure Action Step: No requirement verified
-    with step("STEP-01", description="Connect battery simulator and set initial SOC"):
-        sim.connect()
-        sim.set_soc(100)
+    with step("STEP-01", description="Seed customer and inventory records"):
+        db.seed_customer("user_123")
+        db.seed_product("prod_456", stock=10)
 
     # 2. Action Step with Telemetry Evidence
-    with step("STEP-02", description="Discharge at 2C rate") as s:
-        current_a = sim.discharge(rate="2C")
-        s.attach("discharge_current_a", current_a)
+    with step("STEP-02", description="Apply discount code to cart") as s:
+        discount = cart.apply_coupon("SAVE20")
+        s.attach("discount_percentage", discount.pct)
 
     # 3. Verification Step using step(..., verifies=...)
-    with step("STEP-03", description="Verify low-charge cutoff trigger", verifies="REQ-BAT-004"):
-        assert sim.cutoff_tripped is True
+    with step(
+        "STEP-03", description="Verify discounted total calculation", verifies="REQ-CART-004"
+    ):
+        assert cart.total_gbp == 80.0
 
     # 4. Verification Step using verifies(..., step=...)
-    with verifies("REQ-BAT-005", step="STEP-04", description="Verify low-charge alarm packet"):
-        assert sim.alarm_active("LOW_BATTERY") is True
+    with verifies("REQ-PAY-005", step="STEP-04", description="Verify payment confirmation webhook"):
+        assert webhook.delivered is True
 ```
 
 ### Benefits of Step Tracking
-* **Failure Attribution:** If an action step fails (e.g. a timeout during `STEP-01`), the failure report clearly attributes the issue to the action step without falsely recording requirement defects.
+* **Failure Attribution:** If an action step fails (e.g. database timeout during `STEP-01`), the failure report clearly attributes the issue to the action step without falsely recording requirement defects.
 * **Audit Trail:** Reports include a complete test procedure walkthrough table matching your formal verification protocol.
 * **ALM / PLM Synchronization:** Step IDs export directly to the `steps` column in CSV and JSON for tools like Polarion, Jira Xray, and Jama.

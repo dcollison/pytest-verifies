@@ -24,15 +24,15 @@
 from pytest_verifies import verifies
 
 
-@verifies("REQ-PWR-001", description="Nominal voltage within 5.0 V +/- 2%")
-def test_voltage():
-    measured_v = 5.02
-    assert 4.90 <= measured_v <= 5.10
+@verifies("REQ-AUTH-001", description="Users must authenticate with valid JWT tokens")
+def test_jwt_authentication():
+    token = {"sub": "user_123", "exp": 1893456000}
+    assert token["exp"] > 1700000000
 
 
-def test_telemetry():
-    with verifies("REQ-PWR-002", soft=True, evidence={"limit_a": 1.5}) as ctx:
-        current_a = 1.24
-        ctx.attach("measured_a", current_a)
-        assert current_a < 1.5
+def test_api_rate_limiting():
+    with verifies("REQ-RATE-001", soft=True, evidence={"limit": 60}) as ctx:
+        request_count = 42
+        ctx.attach("request_count", request_count)
+        assert request_count <= 60
 ```

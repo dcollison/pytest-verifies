@@ -26,12 +26,12 @@ Create a requirements manifest `requirements.json` (or `.csv` / `.yaml`):
 {
   "requirements": [
     {
-      "id": "REQ-PWR-001",
-      "text": "Nominal Power Rail 5.0 V +/- 2%"
+      "id": "REQ-AUTH-001",
+      "text": "Users must provide a valid JWT bearer token"
     },
     {
-      "id": "REQ-SAF-001",
-      "text": "Thermal Cutoff Guard at 85 °C"
+      "id": "REQ-RATE-001",
+      "text": "Rate limit API requests to 100 requests per minute"
     }
   ]
 }
@@ -39,22 +39,22 @@ Create a requirements manifest `requirements.json` (or `.csv` / `.yaml`):
 
 ### 2. Annotate Your Pytest Tests
 
-In `tests/test_power.py`:
+In `tests/test_auth.py`:
 
 ```python
 from pytest_verifies import verifies
 
 
-@verifies("REQ-PWR-001")
-def test_power_rail():
-    voltage = 5.0
-    assert voltage == 5.0
+@verifies("REQ-AUTH-001")
+def test_jwt_authentication():
+    token = {"sub": "user_123", "active": True}
+    assert token["active"] is True
 
 
-def test_thermal_guard():
-    with verifies("REQ-SAF-001"):
-        temp_c = 45.0
-        assert temp_c < 85.0
+def test_rate_limiter():
+    with verifies("REQ-RATE-001"):
+        request_count = 45
+        assert request_count <= 100
 ```
 
 ### 3. Run Pytest with Report Generation

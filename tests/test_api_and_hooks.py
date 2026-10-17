@@ -176,7 +176,7 @@ def test_edge_cases_xfail_and_skip(pytester: pytest.Pytester) -> None:
         def test_skipped():
             assert True
 
-        @pytest.mark.xfail(reason="Known hardware defect")
+        @pytest.mark.xfail(reason="Known upstream API defect")
         @verifies("REQ-XFAIL")
         def test_expected_failure():
             assert 1 == 0
@@ -209,15 +209,15 @@ def test_dynamic_evidence_attachment(pytester: pytest.Pytester) -> None:
         """
         from pytest_verifies import verifies
 
-        def test_telemetry():
+        def test_api_metrics():
             # Static evidence passed into verifies
-            with verifies("REQ-EV-1", evidence={"voltage_v": 3.305, "status": "nominal"}):
+            with verifies("REQ-EV-1", evidence={"latency_ms": 42.5, "http_status": 200}):
                 assert True
 
             # Dynamic attachment via ctx.attach and ctx.record_evidence
             with verifies("REQ-EV-2") as ctx:
-                ctx.attach("firmware_version", "2.4.1")
-                ctx.record_evidence({"crc_verified": True})
+                ctx.attach("service_version", "3.1.0")
+                ctx.record_evidence({"cache_hit": True})
                 assert True
         """
     )
@@ -236,19 +236,19 @@ def test_dynamic_evidence_attachment(pytester: pytest.Pytester) -> None:
     data = json.loads(json_path.read_text(encoding="utf-8"))
     reqs = {r["req_id"]: r for r in data["requirements"]}
 
-    assert reqs["REQ-EV-1"]["evidence"] == [{"voltage_v": 3.305, "status": "nominal"}]
-    assert reqs["REQ-EV-2"]["evidence"] == [{"firmware_version": "2.4.1", "crc_verified": True}]
+    assert reqs["REQ-EV-1"]["evidence"] == [{"latency_ms": 42.5, "http_status": 200}]
+    assert reqs["REQ-EV-2"]["evidence"] == [{"service_version": "3.1.0", "cache_hit": True}]
 
     # Verify evidence in Markdown report
     md_text = md_path.read_text(encoding="utf-8")
-    assert "3.305" in md_text
-    assert "firmware_version" in md_text
-    assert "2.4.1" in md_text
+    assert "42.5" in md_text
+    assert "service_version" in md_text
+    assert "3.1.0" in md_text
 
     # Verify evidence in HTML report
     html_text = html_path.read_text(encoding="utf-8")
-    assert "voltage_v" in html_text
-    assert "crc_verified" in html_text
+    assert "latency_ms" in html_text
+    assert "cache_hit" in html_text
 
 
 def test_junit_xml_property_injection(pytester: pytest.Pytester) -> None:

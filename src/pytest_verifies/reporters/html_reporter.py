@@ -64,10 +64,6 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
 
         # Details expansion content
         details_html = []
-        if req.description:
-            details_html.append(
-                f'<div class="detail-desc"><b>Description:</b> {html.escape(req.description)}</div>'
-            )
 
         if req.failure_messages:
             details_html.append('<div class="detail-failures"><b>Failure Diagnostics:</b>')

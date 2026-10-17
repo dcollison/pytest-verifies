@@ -6,7 +6,7 @@ A baseline manifest establishes the master list of requirements that automated t
 
 ## Supported Formats
 
-Baseline manifests require only an `id` and a requirement statement `text`. For compatibility with various external systems and legacy CSV exports, `text`, `description`, `title`, and `requirement` are accepted interchangeably as the requirement statement.
+Baseline manifests require only an `id` and a requirement statement `text` (or `description`).
 
 ### 1. JSON (`requirements.json`)
 
@@ -17,11 +17,11 @@ Supports array format or top-level dictionary:
   "requirements": [
     {
       "id": "REQ-001",
-      "text": "Trigger shutdown if current exceeds 2.0 A"
+      "text": "Users must authenticate with valid JWT bearer token"
     },
     {
       "id": "REQ-002",
-      "text": "Watchdog periodic heartbeat timer within 500 ms"
+      "text": "Rate limiter must throttle exceeding 100 requests per minute"
     }
   ]
 }
@@ -31,19 +31,19 @@ Or as a compact dictionary:
 
 ```json
 {
-  "REQ-001": "Trigger shutdown if current exceeds 2.0 A",
-  "REQ-002": "Watchdog periodic heartbeat timer within 500 ms"
+  "REQ-001": "Users must authenticate with valid JWT bearer token",
+  "REQ-002": "Rate limiter must throttle exceeding 100 requests per minute"
 }
 ```
 
 ### 2. CSV (`requirements.csv`)
 
-Requires an `id` column header (case-insensitive), paired with `text` (or `description` / `title` / `requirement`):
+Requires an `id` column header (case-insensitive), paired with `text` (or `description`):
 
 ```csv
 id,text
-REQ-001,Trigger shutdown if current exceeds 2.0 A
-REQ-002,Watchdog periodic heartbeat timer within 500 ms
+REQ-001,Users must authenticate with valid JWT bearer token
+REQ-002,Rate limiter must throttle exceeding 100 requests per minute
 ```
 
 ### 3. YAML (`requirements.yaml`)
@@ -53,9 +53,9 @@ Requires `pyyaml` (installed automatically if using `docs` or `dev` dependency g
 ```yaml
 requirements:
   - id: REQ-001
-    text: Trigger shutdown if current exceeds 2.0 A
+    text: Users must authenticate with valid JWT bearer token
   - id: REQ-002
-    text: Watchdog periodic heartbeat timer within 500 ms
+    text: Rate limiter must throttle exceeding 100 requests per minute
 ```
 
 ---

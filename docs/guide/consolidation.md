@@ -1,6 +1,6 @@
 # Multi-Run Shard Consolidation
 
-In complex engineering architectures and CI/CD pipelines, automated tests run across different execution environments, stages, and hardware tiers.
+In complex software architectures and CI/CD pipelines, automated tests run across different execution environments, stages, and test tiers.
 
 ---
 
@@ -15,7 +15,7 @@ uv run pytest tests/unit --verifies-out=.verifies --verifies-stage=unit
 # Stage 2: Integration tests
 uv run pytest tests/integration --verifies-out=.verifies --verifies-stage=integration
 
-# Stage 3: System hardware-in-the-loop tests
+# Stage 3: End-to-end system tests
 uv run pytest tests/system --verifies-out=.verifies --verifies-stage=system
 ```
 

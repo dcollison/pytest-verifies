@@ -129,8 +129,8 @@ def _parse_baseline_data(data: Any, path: Path) -> dict[str, BaselineRequirement
             # Format: {"REQ-1": {"title": "..."}, "REQ-2": {...}}
             for key, val in data.items():
                 if not isinstance(val, dict):
-                    # Could be scalar description: {"REQ-1": "Title / Description"}
-                    req = BaselineRequirement(id=str(key).strip(), title=str(val).strip())
+                    # Could be scalar description: {"REQ-1": "Requirement text"}
+                    req = BaselineRequirement(id=str(key).strip(), text=str(val).strip())
                 else:
                     item_dict = dict(val)
                     item_dict.setdefault("id", str(key).strip())
