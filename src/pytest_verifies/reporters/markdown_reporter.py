@@ -40,26 +40,34 @@ def generate_markdown_report(report: RTMReport, output_path: str | Path | None =
     total_reqs = report.total_baseline_requirements or report.total_observed_requirements
     lines.append(f"| **Total Requirements** | {total_reqs} | 100.0% |")
 
-    v_pct = f"{report.coverage_percentage:.1f}%"
-    lines.append(f"| **Verified** | {report.verified_count} | {v_pct} |")
+    p_pct = f"{report.coverage_percentage:.1f}%"
+    lines.append(f"| **Pass** | {report.passed_count} | {p_pct} |")
 
     f_pct = f"{(report.failed_count / total_reqs * 100.0):.1f}%" if total_reqs > 0 else "0.0%"
-    lines.append(f"| **Failed** | {report.failed_count} | {f_pct} |")
+    lines.append(f"| **Fail** | {report.failed_count} | {f_pct} |")
 
-    u_pct = f"{(report.unverified_count / total_reqs * 100.0):.1f}%" if total_reqs > 0 else "0.0%"
-    lines.append(f"| **Unverified** | {report.unverified_count} | {u_pct} |")
+    part_pct = f"{(report.partial_count / total_reqs * 100.0):.1f}%" if total_reqs > 0 else "0.0%"
+    lines.append(f"| **Partial** | {report.partial_count} | {part_pct} |")
 
     o_pct = f"{(report.orphan_count / total_reqs * 100.0):.1f}%" if total_reqs > 0 else "0.0%"
     lines.append(f"| **Orphans** | {report.orphan_count} | {o_pct} |")
     lines.append("")
 
+    has_stages = report.has_stages
+
     # Requirements Traceability Table
     lines.append("## Requirements Traceability")
     lines.append("")
-    lines.append(
-        "| Requirement ID | Requirement Text | Status | In Baseline | Stages | Verified By Tests |"
-    )
-    lines.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
+    if has_stages:
+        lines.append(
+            "| Requirement ID | Requirement Text | Status | In Baseline | Stages | Verified By Tests |"
+        )
+        lines.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
+    else:
+        lines.append(
+            "| Requirement ID | Requirement Text | Status | In Baseline | Verified By Tests |"
+        )
+        lines.append("| :--- | :--- | :--- | :--- | :--- |")
 
     for req in report.requirements:
         status_badge = req.display_status
@@ -68,19 +76,24 @@ def generate_markdown_report(report: RTMReport, output_path: str | Path | None =
 
         text_display = _escape_md_cell(req.text) if req.text else "—"
         in_base_display = "Yes" if req.in_baseline else "No"
-        stages_display = (
-            ", ".join(
-                f"`{_escape_md_cell(stage)}: {_escape_md_cell(status)}`"
-                for stage, status in sorted(req.stages_verified.items())
-            )
-            if req.stages_verified
-            else "—"
-        )
         tests_display = f"{len(req.verified_by_tests)} test(s)" if req.verified_by_tests else "—"
 
-        lines.append(
-            f"| `{_escape_md_cell(req.req_id)}` | {text_display} | {_escape_md_cell(status_badge)} | {in_base_display} | {stages_display} | {tests_display} |"
-        )
+        if has_stages:
+            stages_display = (
+                ", ".join(
+                    f"`{_escape_md_cell(stage)}: {_escape_md_cell(status)}`"
+                    for stage, status in sorted(req.stages_verified.items())
+                )
+                if req.stages_verified
+                else "—"
+            )
+            lines.append(
+                f"| `{_escape_md_cell(req.req_id)}` | {text_display} | {_escape_md_cell(status_badge)} | {in_base_display} | {stages_display} | {tests_display} |"
+            )
+        else:
+            lines.append(
+                f"| `{_escape_md_cell(req.req_id)}` | {text_display} | {_escape_md_cell(status_badge)} | {in_base_display} | {tests_display} |"
+            )
     lines.append("")
 
     # Evidence and Failure Details Section

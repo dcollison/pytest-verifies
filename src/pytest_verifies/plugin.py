@@ -297,8 +297,8 @@ class VerifiesControllerPlugin:
             # Evaluate quality gates
             gate_failed = False
 
-            # Gate A: Any requirement FAILED
-            if any(r.status == "FAILED" for r in report.requirements):
+            # Gate A: Any requirement with test failures (FAIL or PARTIAL with failure)
+            if any(r.has_failure for r in report.requirements):
                 gate_failed = True
 
             # Gate B: Disallow orphans

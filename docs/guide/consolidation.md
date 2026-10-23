@@ -47,7 +47,6 @@ uv run pytest-verifies combine .verifies/ \
 ### Deterministic Status Resolution
 
 For each requirement across all runs and stages:
-* **`FAILED`**: Any stage or test recorded a `FAILED`, `ERROR`, or `XFAILED` outcome.
-* **`VERIFIED`**: At least one test in any stage `PASSED` (or `XPASS`), and zero tests failed.
-* **`PARTIAL`**: Displayed when a requirement has verified outcomes in some stages/tests, but is skipped or unverified in others.
-* **`UNVERIFIED`**: Declared in baseline but never executed, or all runs were `SKIPPED`.
+* **`PASS`**: At least one test passed (`PASSED` or `XPASS`), and zero tests failed, skipped, or had stage disparities.
+* **`PARTIAL`**: Displayed when a requirement has passed in at least one test/stage, but also has failures, skips, or stage disparities in others.
+* **`FAIL`**: All test executions failed or were unverified (e.g. declared in baseline but never executed, or all runs were `SKIPPED`).

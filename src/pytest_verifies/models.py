@@ -137,7 +137,7 @@ class ConsolidatedRequirement:
     text: str = ""
     in_baseline: bool = True
     is_orphan: bool = False
-    status: str = "UNVERIFIED"  # "VERIFIED", "FAILED", "UNVERIFIED"
+    status: str = "FAIL"  # "PASS", "FAIL", "PARTIAL"
     stages_verified: dict[str, str] = field(default_factory=dict)
     steps: list[str] = field(default_factory=list)
     records: list[VerificationRecord] = field(default_factory=list)
@@ -147,20 +147,18 @@ class ConsolidatedRequirement:
 
     @property
     def is_partial(self) -> bool:
-        """Return True if the requirement is verified but has unverified stages or skipped records."""
-        return self.status == "VERIFIED" and (
-            any(s == "UNVERIFIED" for s in self.stages_verified.values())
-            or any(r.status == "SKIPPED" for r in self.records)
-        )
+        """Return True if the requirement has partial verification status."""
+        return self.status == "PARTIAL"
 
     @property
     def display_status(self) -> str:
-        """Return human-readable status ('FAILED', 'PARTIAL', 'VERIFIED', or 'UNVERIFIED')."""
-        if self.status == "FAILED":
-            return "FAILED"
-        if self.status == "VERIFIED":
-            return "PARTIAL" if self.is_partial else "VERIFIED"
-        return "UNVERIFIED"
+        """Return human-readable status ('PASS', 'PARTIAL', or 'FAIL')."""
+        return self.status
+
+    @property
+    def has_failure(self) -> bool:
+        """Return True if any test record for this requirement failed."""
+        return any(r.status in ("FAILED", "ERROR", "XFAILED") for r in self.records)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise consolidated requirement to a dictionary."""
@@ -197,9 +195,26 @@ class RTMReport:
     runs: list[dict[str, Any]] = field(default_factory=list)
 
     @property
+    def passed_count(self) -> int:
+        """Return the number of passed requirements."""
+        return self.verified_count
+
+    @property
     def partial_count(self) -> int:
-        """Return the number of verified requirements with partial verification."""
+        """Return the number of requirements with partial verification."""
         return sum(1 for r in self.requirements if r.is_partial)
+
+    @property
+    def has_stages(self) -> bool:
+        """Return True if any non-default execution stage was included in the report."""
+        for req in self.requirements:
+            for stage in req.stages_verified.keys():
+                if stage and stage != "default":
+                    return True
+        for rec in self.test_records:
+            if rec.stage and rec.stage != "default":
+                return True
+        return False
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise complete RTM report to a dictionary."""
@@ -209,8 +224,10 @@ class RTMReport:
             "summary": {
                 "total_baseline_requirements": self.total_baseline_requirements,
                 "total_observed_requirements": self.total_observed_requirements,
+                "passed_count": self.passed_count,
                 "verified_count": self.verified_count,
                 "failed_count": self.failed_count,
+                "partial_count": self.partial_count,
                 "unverified_count": self.unverified_count,
                 "orphan_count": self.orphan_count,
                 "coverage_percentage": round(self.coverage_percentage, 2),

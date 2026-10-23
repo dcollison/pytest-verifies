@@ -181,9 +181,9 @@ def consolidate_requirements(
     """Consolidate raw verification records across runs/stages against an optional baseline.
 
     Applies deterministic status resolution:
-      - FAILED: At least one record is FAILED, ERROR, or XFAILED.
-      - VERIFIED: At least one record is PASSED or XPASS, and ZERO are FAILED, ERROR, or XFAILED.
-      - UNVERIFIED: No records exist, or all records are SKIPPED.
+      - FAIL: No passing records, tests failed, or no records exist (unverified).
+      - PASS: At least one record is PASSED or XPASS, and ZERO failed or skipped.
+      - PARTIAL: Mixed outcomes (some passed and some failed/skipped, or stage disparity).
 
     Args:
         records: Collection of verification records from one or more shards.
@@ -204,6 +204,9 @@ def consolidate_requirements(
 
     baseline_req_ids = set(baseline.keys()) if baseline is not None else set()
     all_req_ids = sorted(baseline_req_ids | observed_req_ids)
+
+    # Check if any non-default stage was included in records
+    any_has_stage = any(r.stage and r.stage != "default" for r in records)
 
     consolidated_list: list[ConsolidatedRequirement] = []
     verified_count = 0
@@ -229,35 +232,42 @@ def consolidate_requirements(
                     text = r.description
                     break
 
-        # 2. Determine consolidated status
+        # Stage breakdown (only populated if stages were included in the run/shards)
+        stages_verified: dict[str, str] = {}
+        if any_has_stage:
+            stage_grouped: dict[str, list[VerificationRecord]] = {}
+            for r in req_records:
+                if r.stage:
+                    stage_grouped.setdefault(r.stage, []).append(r)
+
+            for stage, s_records in sorted(stage_grouped.items()):
+                s_fail = any(sr.status in ("FAILED", "ERROR", "XFAILED") for sr in s_records)
+                s_pass = any(sr.status in ("PASSED", "XPASS") for sr in s_records)
+                if s_pass and s_fail:
+                    stages_verified[stage] = "PARTIAL"
+                elif s_pass:
+                    stages_verified[stage] = "PASS"
+                else:
+                    stages_verified[stage] = "FAIL"
+
+        # Determine consolidated status: PASS, PARTIAL, or FAIL
         has_failure = any(r.status in ("FAILED", "ERROR", "XFAILED") for r in req_records)
         has_pass = any(r.status in ("PASSED", "XPASS") for r in req_records)
+        has_skip = any(r.status == "SKIPPED" for r in req_records)
+        stage_disparity = (
+            any(st != "PASS" for st in stages_verified.values()) if stages_verified else False
+        )
 
-        if has_failure:
-            status = "FAILED"
-            failed_count += 1
+        if has_pass and (has_failure or has_skip or stage_disparity):
+            status = "PARTIAL"
         elif has_pass:
-            status = "VERIFIED"
+            status = "PASS"
             verified_count += 1
         else:
-            status = "UNVERIFIED"
-            unverified_count += 1
-
-        # 3. Stage breakdown
-        stages_verified: dict[str, str] = {}
-        stage_grouped: dict[str, list[VerificationRecord]] = {}
-        for r in req_records:
-            stage_grouped.setdefault(r.stage, []).append(r)
-
-        for stage, s_records in sorted(stage_grouped.items()):
-            s_fail = any(sr.status in ("FAILED", "ERROR", "XFAILED") for sr in s_records)
-            s_pass = any(sr.status in ("PASSED", "XPASS") for sr in s_records)
-            if s_fail:
-                stages_verified[stage] = "FAILED"
-            elif s_pass:
-                stages_verified[stage] = "VERIFIED"
-            else:
-                stages_verified[stage] = "UNVERIFIED"
+            status = "FAIL"
+            failed_count += 1
+            if not has_failure:
+                unverified_count += 1
 
         # 4. Evidence and failure aggregation
         verified_by_tests: list[str] = sorted(

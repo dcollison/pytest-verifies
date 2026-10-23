@@ -151,8 +151,8 @@ def combine_command(args: argparse.Namespace) -> int:
     # Quality Gate Checks
     exit_code = 0
 
-    # 1. Any requirement with consolidated status FAILED
-    failed_reqs = [r.req_id for r in report.requirements if r.status == "FAILED"]
+    # 1. Any requirement with test failures (FAIL or PARTIAL with failure)
+    failed_reqs = [r.req_id for r in report.requirements if r.has_failure]
     if failed_reqs:
         print(
             f"Quality gate failure: {len(failed_reqs)} requirement(s) failed: {', '.join(failed_reqs)}",

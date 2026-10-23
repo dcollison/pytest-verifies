@@ -17,56 +17,84 @@ def render_console_summary(report: RTMReport, writer: Any) -> None:
     line_fn = getattr(writer, "write_line", None) or writer.line
     write_fn = writer.write
 
-    sep_fn("=", "Requirements Traceability Matrix (RTM)", bold=True)
-    header = f"{'Requirement ID':<20} {'Status':<12} {'Stages':<22} {'Tests':>5}  Requirement Text"
-    line_fn(header, bold=True)
-    line_fn("-" * len(header))
+    has_stages = report.has_stages
+
+    # Calculate required column widths dynamically so columns NEVER overflow or misalign
+    id_width = max(20, max((len(r.req_id) for r in report.requirements), default=20))
+
+    formatted_rows: list[tuple[str, str, dict[str, bool], str, str, str]] = []
+    status_texts: list[str] = []
+    stages_texts: list[str] = []
 
     for req in report.requirements:
-        status_text = req.display_status
-        if status_text == "FAILED":
+        st = req.display_status
+        if req.is_orphan:
+            st += " [ORPHAN]"
+        status_texts.append(st)
+
+        if has_stages:
+            stages_str = (
+                ", ".join(f"{s}:{st_val}" for s, st_val in sorted(req.stages_verified.items()))
+                or "-"
+            )
+            if len(stages_str) > 28:
+                stages_str = stages_str[:25] + "..."
+            stages_texts.append(stages_str)
+        else:
+            stages_str = ""
+
+        if st.startswith("FAIL"):
             status_color: dict[str, bool] = {"red": True, "bold": True}
-        elif status_text == "PARTIAL":
+        elif st.startswith("PARTIAL"):
             status_color = {"yellow": True, "bold": True}
-        elif status_text == "VERIFIED":
+        elif st.startswith("PASS"):
             status_color = {"green": True, "bold": True}
         else:
             status_color = {"cyan": True}
 
-        if req.is_orphan:
-            status_text += " [ORPHAN]"
-
-        stages_str = ", ".join(f"{s}:{st}" for s, st in sorted(req.stages_verified.items())) or "-"
-        if len(stages_str) > 21:
-            stages_str = stages_str[:18] + "..."
-
         test_count_str = str(len(req.verified_by_tests))
+        formatted_rows.append(
+            (req.req_id, st, status_color, stages_str, test_count_str, req.text or "")
+        )
 
-        write_fn(f"{req.req_id:<20} ")
-        write_fn(f"{status_text:<12} ", **status_color)
-        write_fn(f"{stages_str:<22} ")
+    status_width = max(10, max((len(st) for st in status_texts), default=10))
+
+    if has_stages:
+        stages_width = max(15, max((len(st) for st in stages_texts), default=15))
+        header = (
+            f"{'Requirement ID':<{id_width}} {'Status':<{status_width}} "
+            f"{'Stages':<{stages_width}} {'Tests':>5}  Requirement Text"
+        )
+    else:
+        stages_width = 0
+        header = f"{'Requirement ID':<{id_width}} {'Status':<{status_width}} {'Tests':>5}  Requirement Text"
+
+    sep_fn("=", "Requirements Traceability Matrix (RTM)", bold=True)
+    line_fn(header, bold=True)
+    line_fn("-" * len(header))
+
+    for req_id, st, status_color, stages_str, test_count_str, text in formatted_rows:
+        write_fn(f"{req_id:<{id_width}} ")
+        write_fn(f"{st:<{status_width}} ", **status_color)
+        if has_stages:
+            write_fn(f"{stages_str:<{stages_width}} ")
         write_fn(f"{test_count_str:>5}  ")
-        line_fn(req.text or "")
+        line_fn(text)
 
-    partial_count = report.partial_count
     line_fn("-" * len(header))
     total_reqs = report.total_baseline_requirements or report.total_observed_requirements
-    v_pct = f"{report.coverage_percentage:.1f}%"
+    p_pct = f"{report.coverage_percentage:.1f}%"
     write_fn(f"Total: {total_reqs} | ")
-    write_fn(f"Verified: {report.verified_count} ({v_pct}) | ", green=True, bold=True)
+    write_fn(f"Pass: {report.passed_count} ({p_pct}) | ", green=True, bold=True)
     write_fn(
-        f"Failed: {report.failed_count} | ",
+        f"Fail: {report.failed_count} | ",
         red=(report.failed_count > 0),
         bold=(report.failed_count > 0),
     )
     write_fn(
-        f"Partial: {partial_count} | ",
-        yellow=(partial_count > 0),
-        bold=(partial_count > 0),
-    )
-    write_fn(
-        f"Unverified: {report.unverified_count} | ",
-        cyan=(report.unverified_count > 0),
+        f"Partial: {report.partial_count} | ",
+        yellow=(report.partial_count > 0),
+        bold=(report.partial_count > 0),
     )
     line_fn(
         f"Orphans: {report.orphan_count}",

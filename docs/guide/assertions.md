@@ -74,7 +74,7 @@ def test_cat_qualities():
     with verifies("REQ-CAT-001", soft=True):
         assert cat["caught_laser"] is True, "The red dot eluded the cat once again!"
 
-    # Block 2 executes and records VERIFIED
+    # Block 2 executes and records PASS
     with verifies("REQ-CAT-002", soft=True):
         assert cat["is_napping"] is True
 
