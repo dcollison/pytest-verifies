@@ -1,6 +1,6 @@
 # pytest-verifies
 
-[![CI](https://img.shields.io/badge/pytest--verifies-v0.0.1-blue.svg)](https://github.com/dcollison/pytest-verifies)
+[![CI](https://img.shields.io/badge/pytest--verifies-v1.1.1-blue.svg)](https://github.com/dcollison/pytest-verifies)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Standards](https://img.shields.io/badge/compliance-ISO%2026262%20%7C%20IEC%2062304%20%7C%20DO--178C%20%7C%20SOC2-orange.svg)](#standards-compliance)

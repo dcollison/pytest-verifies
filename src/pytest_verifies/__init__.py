@@ -8,6 +8,6 @@ from __future__ import annotations
 
 from pytest_verifies.context import step, verifies
 
-__version__ = "0.0.1"
+__version__ = "1.1.1"
 
 __all__ = ["step", "verifies", "__version__"]
