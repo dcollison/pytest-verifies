@@ -6,8 +6,22 @@ Consistent British English spelling is used throughout.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+import collections.abc
+from dataclasses import dataclass, field
 from typing import Any
+
+
+def _normalise_json(value: Any) -> Any:
+    """Recursively convert arbitrary Python values into JSON- and xdist-safe primitives."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, dict):
+        return {str(k): _normalise_json(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_normalise_json(v) for v in value]
+    if isinstance(value, (set, frozenset)):
+        return [_normalise_json(v) for v in sorted(value, key=str)]
+    return str(value)
 
 
 @dataclass
@@ -15,24 +29,31 @@ class BaselineRequirement:
     """Represents a requirement definition imported from an external baseline manifest."""
 
     id: str
-    title: str = ""
-    description: str = ""
-    priority: str = ""
-    category: str = ""
+    text: str = ""
+
+    def __post_init__(self) -> None:
+        self.id = self.id.strip()
+        self.text = self.text.strip()
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise baseline requirement to a dictionary."""
-        return asdict(self)
+        return {
+            "id": self.id,
+            "text": self.text,
+        }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> BaselineRequirement:
         """Deserialise baseline requirement from a dictionary."""
+        raw_text = ""
+        for key in ("text", "description", "title", "requirement"):
+            val = data.get(key)
+            if val is not None and str(val).strip():
+                raw_text = str(val).strip()
+                break
         return cls(
-            id=str(data.get("id", "")).strip(),
-            title=str(data.get("title", "")).strip(),
-            description=str(data.get("description", "")).strip(),
-            priority=str(data.get("priority", "")).strip(),
-            category=str(data.get("category", "")).strip(),
+            id=str(data.get("id") or "").strip(),
+            text=raw_text,
         )
 
 
@@ -52,6 +73,10 @@ class VerificationRecord:
     duration_s: float = 0.0
     timestamp: str = ""
 
+    def __post_init__(self) -> None:
+        self.req_ids = [s for r in self.req_ids if r is not None and (s := str(r).strip())]
+        self.evidence = _normalise_json(self.evidence)
+
     @property
     def is_action(self) -> bool:
         """Return True if this record represents an action step without requirement IDs."""
@@ -68,7 +93,7 @@ class VerificationRecord:
             "location": self.location,
             "description": self.description,
             "message": self.message,
-            "evidence": self.evidence,
+            "evidence": _normalise_json(self.evidence),
             "duration_s": round(self.duration_s, 6),
             "timestamp": self.timestamp,
         }
@@ -76,63 +101,31 @@ class VerificationRecord:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> VerificationRecord:
         """Deserialise verification record from a dictionary."""
+        raw_reqs = data.get("req_ids") or []
+        if isinstance(raw_reqs, str):
+            raw_reqs = [raw_reqs]
+        elif not isinstance(raw_reqs, collections.abc.Iterable):
+            raw_reqs = []
+        raw_step = data.get("step_id")
+        step_id = str(raw_step).strip() if raw_step is not None and str(raw_step).strip() else None
+        raw_desc = data.get("description")
+        description = str(raw_desc) if raw_desc is not None else None
+        raw_msg = data.get("message")
+        message = str(raw_msg) if raw_msg is not None else None
+        raw_stage = data.get("stage")
+        stage = (str(raw_stage).strip() if raw_stage is not None else "") or "default"
         return cls(
-            nodeid=str(data.get("nodeid", "")),
-            req_ids=[str(r) for r in data.get("req_ids", [])],
-            status=str(data.get("status", "UNVERIFIED")),
-            stage=str(data.get("stage", "default")),
-            step_id=data.get("step_id"),
-            location=str(data.get("location", "")),
-            description=data.get("description"),
-            message=data.get("message"),
-            evidence=data.get("evidence"),
-            duration_s=float(data.get("duration_s", 0.0)),
-            timestamp=str(data.get("timestamp", "")),
-        )
-
-
-@dataclass
-class TestExecutionRecord:
-    """Metadata and execution context for a single test shard run."""
-
-    run_id: str
-    stage: str
-    timestamp: str
-    git_sha: str | None = None
-    git_dirty: bool | None = None
-    python_version: str = ""
-    pytest_version: str = ""
-    hostname: str = ""
-    records: list[VerificationRecord] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialise test execution run metadata to a dictionary."""
-        return {
-            "run_id": self.run_id,
-            "stage": self.stage,
-            "timestamp": self.timestamp,
-            "git_sha": self.git_sha,
-            "git_dirty": self.git_dirty,
-            "python_version": self.python_version,
-            "pytest_version": self.pytest_version,
-            "hostname": self.hostname,
-            "records": [r.to_dict() for r in self.records],
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> TestExecutionRecord:
-        """Deserialise test execution run metadata from a dictionary."""
-        records_raw = data.get("records", [])
-        return cls(
-            run_id=str(data.get("run_id", "")),
-            stage=str(data.get("stage", "default")),
-            timestamp=str(data.get("timestamp", "")),
-            git_sha=data.get("git_sha"),
-            git_dirty=data.get("git_dirty"),
-            python_version=str(data.get("python_version", "")),
-            pytest_version=str(data.get("pytest_version", "")),
-            hostname=str(data.get("hostname", "")),
-            records=[VerificationRecord.from_dict(r) for r in records_raw],
+            nodeid=str(data.get("nodeid") or ""),
+            req_ids=[s for r in raw_reqs if r is not None and (s := str(r).strip())],
+            status=str(data.get("status") or "UNVERIFIED"),
+            stage=stage,
+            step_id=step_id,
+            location=str(data.get("location") or ""),
+            description=description,
+            message=message,
+            evidence=_normalise_json(data.get("evidence")),
+            duration_s=float(data.get("duration_s") or 0.0),
+            timestamp=str(data.get("timestamp") or ""),
         )
 
 
@@ -141,9 +134,7 @@ class ConsolidatedRequirement:
     """Consolidated traceability status and evidence for an individual requirement."""
 
     req_id: str
-    title: str = ""
-    description: str = ""
-    priority: str = ""
+    text: str = ""
     in_baseline: bool = True
     is_orphan: bool = False
     status: str = "UNVERIFIED"  # "VERIFIED", "FAILED", "UNVERIFIED"
@@ -154,13 +145,28 @@ class ConsolidatedRequirement:
     evidence: list[Any] = field(default_factory=list)
     failure_messages: list[str] = field(default_factory=list)
 
+    @property
+    def is_partial(self) -> bool:
+        """Return True if the requirement is verified but has unverified stages or skipped records."""
+        return self.status == "VERIFIED" and (
+            any(s == "UNVERIFIED" for s in self.stages_verified.values())
+            or any(r.status == "SKIPPED" for r in self.records)
+        )
+
+    @property
+    def display_status(self) -> str:
+        """Return human-readable status ('FAILED', 'PARTIAL', 'VERIFIED', or 'UNVERIFIED')."""
+        if self.status == "FAILED":
+            return "FAILED"
+        if self.status == "VERIFIED":
+            return "PARTIAL" if self.is_partial else "VERIFIED"
+        return "UNVERIFIED"
+
     def to_dict(self) -> dict[str, Any]:
         """Serialise consolidated requirement to a dictionary."""
         return {
             "req_id": self.req_id,
-            "title": self.title,
-            "description": self.description,
-            "priority": self.priority,
+            "text": self.text,
             "in_baseline": self.in_baseline,
             "is_orphan": self.is_orphan,
             "status": self.status,
@@ -168,7 +174,7 @@ class ConsolidatedRequirement:
             "steps": list(self.steps),
             "records": [r.to_dict() for r in self.records],
             "verified_by_tests": list(self.verified_by_tests),
-            "evidence": list(self.evidence),
+            "evidence": [_normalise_json(e) for e in self.evidence],
             "failure_messages": list(self.failure_messages),
         }
 
@@ -189,6 +195,11 @@ class RTMReport:
     requirements: list[ConsolidatedRequirement] = field(default_factory=list)
     test_records: list[VerificationRecord] = field(default_factory=list)
     runs: list[dict[str, Any]] = field(default_factory=list)
+
+    @property
+    def partial_count(self) -> int:
+        """Return the number of verified requirements with partial verification."""
+        return sum(1 for r in self.requirements if r.is_partial)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise complete RTM report to a dictionary."""

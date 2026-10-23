@@ -68,6 +68,9 @@ def _load_csv_baseline(path: Path) -> dict[str, BaselineRequirement]:
             raise ValueError(f"CSV baseline manifest '{path}' must contain an 'id' header column.")
 
         for line_no, row in enumerate(reader, start=2):
+            if not any((v or "").strip() for k, v in row.items() if k and isinstance(v, str)):
+                continue
+
             # Normalise keys to lowercase
             norm_row = {k.strip().lower(): (v.strip() if v else "") for k, v in row.items() if k}
             req_id = norm_row.get("id", "").strip()
@@ -76,13 +79,7 @@ def _load_csv_baseline(path: Path) -> dict[str, BaselineRequirement]:
                     f"Line {line_no} in CSV baseline manifest '{path}' contains an empty requirement ID."
                 )
 
-            requirements[req_id] = BaselineRequirement(
-                id=req_id,
-                title=norm_row.get("title", ""),
-                description=norm_row.get("description", ""),
-                priority=norm_row.get("priority", "").upper(),
-                category=norm_row.get("category", ""),
-            )
+            requirements[req_id] = BaselineRequirement.from_dict(norm_row)
 
     return requirements
 
@@ -113,7 +110,11 @@ def _parse_baseline_data(data: Any, path: Path) -> dict[str, BaselineRequirement
         if "requirements" in data and isinstance(data["requirements"], list):
             items = data["requirements"]
             for idx, item in enumerate(items):
-                if not isinstance(item, dict) or "id" not in item or not str(item["id"]).strip():
+                if (
+                    not isinstance(item, dict)
+                    or item.get("id") is None
+                    or not str(item["id"]).strip()
+                ):
                     raise ValueError(
                         f"Item {idx} in 'requirements' list of '{path}' must be a dictionary with an 'id'."
                     )
@@ -122,18 +123,26 @@ def _parse_baseline_data(data: Any, path: Path) -> dict[str, BaselineRequirement
         else:
             # Format: {"REQ-1": {"title": "..."}, "REQ-2": {...}}
             for key, val in data.items():
-                if not isinstance(val, dict):
-                    # Could be scalar description: {"REQ-1": "Title / Description"}
-                    req = BaselineRequirement(id=str(key).strip(), title=str(val).strip())
-                else:
+                req_id = str(key).strip() if key is not None else ""
+                if not req_id:
+                    raise ValueError(
+                        f"Baseline manifest '{path}' contains an empty requirement ID."
+                    )
+                if isinstance(val, dict):
                     item_dict = dict(val)
-                    item_dict.setdefault("id", str(key).strip())
+                    if item_dict.get("id") is None or not str(item_dict["id"]).strip():
+                        item_dict["id"] = req_id
                     req = BaselineRequirement.from_dict(item_dict)
+                elif val is None:
+                    req = BaselineRequirement(id=req_id, text="")
+                else:
+                    # Could be scalar description: {"REQ-1": "Requirement text"}
+                    req = BaselineRequirement(id=req_id, text=str(val).strip())
                 requirements[req.id] = req
 
     elif isinstance(data, list):
         for idx, item in enumerate(data):
-            if not isinstance(item, dict) or "id" not in item or not str(item["id"]).strip():
+            if not isinstance(item, dict) or item.get("id") is None or not str(item["id"]).strip():
                 raise ValueError(
                     f"Item {idx} in '{path}' must be a dictionary containing a non-empty 'id'."
                 )

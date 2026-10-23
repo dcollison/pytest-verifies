@@ -30,22 +30,8 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
     rows_html: list[str] = []
 
     for req in report.requirements:
-        if req.status == "FAILED":
-            display_status = "FAILED"
-            status_lower = "failed"
-        elif req.status == "VERIFIED":
-            is_partial = any(s == "UNVERIFIED" for s in req.stages_verified.values()) or any(
-                r.status == "SKIPPED" for r in req.records
-            )
-            if is_partial:
-                display_status = "PARTIAL"
-                status_lower = "partial"
-            else:
-                display_status = "VERIFIED"
-                status_lower = "verified"
-        else:
-            display_status = "UNVERIFIED"
-            status_lower = "unverified"
+        display_status = req.display_status
+        status_lower = display_status.lower()
 
         is_orphan_cls = " is-orphan" if req.is_orphan else ""
         row_classes = f"req-row status-{status_lower}{is_orphan_cls}"
@@ -64,10 +50,6 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
 
         # Details expansion content
         details_html = []
-        if req.description:
-            details_html.append(
-                f'<div class="detail-desc"><b>Description:</b> {html.escape(req.description)}</div>'
-            )
 
         if req.failure_messages:
             details_html.append('<div class="detail-failures"><b>Failure Diagnostics:</b>')
@@ -76,7 +58,7 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
             details_html.append("</div>")
 
         if req.evidence:
-            evidence_json = json.dumps(req.evidence, indent=2)
+            evidence_json = json.dumps(req.evidence, indent=2, default=str)
             details_html.append(
                 f'<div class="detail-evidence"><b>Objective Evidence:</b><pre class="code-box evidence-box">{html.escape(evidence_json)}</pre></div>'
             )
@@ -112,7 +94,7 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
               {details_block}
             </details>
           </td>
-          <td class="col-title">{html.escape(req.title) or "<em>(No title)</em>"}</td>
+          <td class="col-text">{html.escape(req.text) or "<em>(No text)</em>"}</td>
           <td class="col-status">
             <span class="badge badge-{status_lower}">{display_status}</span>
             {badge_extra}
@@ -132,7 +114,7 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
         for ar in action_records:
             ev_html = ""
             if ar.evidence:
-                ev_json = json.dumps(ar.evidence, indent=2)
+                ev_json = json.dumps(ar.evidence, indent=2, default=str)
                 ev_html = f'<details><summary>Evidence</summary><pre class="code-box evidence-box">{html.escape(ev_json)}</pre></details>'
             elif ar.message:
                 ev_html = f'<pre class="code-box failure-box">{html.escape(ar.message)}</pre>'
@@ -399,11 +381,12 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
       <div class="filters">
         <button class="btn active" data-filter="all">All ({len(report.requirements)})</button>
         <button class="btn" data-filter="verified">Verified ({report.verified_count})</button>
+        <button class="btn" data-filter="partial">Partial ({report.partial_count})</button>
         <button class="btn" data-filter="failed">Failed ({report.failed_count})</button>
         <button class="btn" data-filter="unverified">Unverified ({report.unverified_count})</button>
         <button class="btn" data-filter="orphan">Orphans ({report.orphan_count})</button>
       </div>
-      <input type="text" id="searchInput" class="search-box" placeholder="Filter by ID, Title, or Test..." />
+      <input type="text" id="searchInput" class="search-box" placeholder="Filter by ID, Text, or Test..." />
     </div>
 
     <div class="table-container">
@@ -411,7 +394,7 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
         <thead>
           <tr>
             <th>Requirement ID</th>
-            <th>Title</th>
+            <th>Requirement Text</th>
             <th>Status</th>
             <th>In Baseline</th>
             <th>Stages</th>
@@ -446,6 +429,8 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
             matchesFilter = true;
           }} else if (currentFilter === 'orphan') {{
             matchesFilter = isOrphan;
+          }} else if (currentFilter === 'verified') {{
+            matchesFilter = (status === 'verified' || status === 'partial');
           }} else {{
             matchesFilter = (status === currentFilter);
           }}

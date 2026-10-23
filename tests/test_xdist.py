@@ -12,6 +12,7 @@ def test_xdist_parallel_execution_and_aggregation(pytester: pytest.Pytester) -> 
     # Create test suite with 8 tests distributed across 2 workers
     tests_code = """
 import time
+from pathlib import Path
 from pytest_verifies import verifies
 
 @verifies("REQ-DIST-01")
@@ -25,11 +26,11 @@ def test_w1_02():
     assert True
 
 def test_w2_03():
-    with verifies("REQ-DIST-03", evidence={"worker_test": 3}):
+    with verifies("REQ-DIST-03", evidence={"worker_test": 3, "log": Path("/tmp/w3.log")}):
         assert True
 
 def test_w2_04():
-    with verifies("REQ-DIST-04", evidence={"worker_test": 4}):
+    with verifies("REQ-DIST-04", evidence={"worker_test": 4, "tags": {"xdist", "parallel"}}):
         assert True
 
 @verifies("REQ-DIST-05")

@@ -24,15 +24,15 @@
 from pytest_verifies import verifies
 
 
-@verifies("REQ-PWR-001", description="Nominal voltage within 5.0 V +/- 2%")
-def test_voltage():
-    measured_v = 5.02
-    assert 4.90 <= measured_v <= 5.10
+@verifies("REQ-DOG-001", description="Dogs must be able to bark")
+def test_dog_bark():
+    dog = {"name": "Buster", "sound": "woof"}
+    assert dog["sound"] == "woof"
 
 
-def test_telemetry():
-    with verifies("REQ-PWR-002", soft=True, evidence={"limit_a": 1.5}) as ctx:
-        current_a = 1.24
-        ctx.attach("measured_a", current_a)
-        assert current_a < 1.5
+def test_cat_contentment():
+    with verifies("REQ-CAT-001", soft=True, evidence={"chin_scratches": 5}) as ctx:
+        purr_db = 45
+        ctx.attach("purr_volume_db", purr_db)
+        assert purr_db > 30
 ```

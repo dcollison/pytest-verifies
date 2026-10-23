@@ -6,6 +6,8 @@ A baseline manifest establishes the master list of requirements that automated t
 
 ## Supported Formats
 
+Baseline manifests require only an `id` and a requirement statement `text` (or `description`).
+
 ### 1. JSON (`requirements.json`)
 
 Supports array format or top-level dictionary:
@@ -14,28 +16,34 @@ Supports array format or top-level dictionary:
 {
   "requirements": [
     {
-      "id": "REQ-001",
-      "title": "Over-current protection",
-      "description": "Trigger shutdown if current exceeds 2.0 A",
-      "priority": "HIGH"
+      "id": "REQ-DOG-001",
+      "text": "Dogs must be able to bark"
     },
     {
-      "id": "REQ-002",
-      "title": "Watchdog heartbeat",
-      "priority": "MEDIUM"
+      "id": "REQ-CAT-001",
+      "text": "Cats must be able to purr when content"
     }
   ]
 }
 ```
 
+Or as a compact dictionary:
+
+```json
+{
+  "REQ-DOG-001": "Dogs must be able to bark",
+  "REQ-CAT-001": "Cats must be able to purr when content"
+}
+```
+
 ### 2. CSV (`requirements.csv`)
 
-Requires an `id` column header (case-insensitive):
+Requires an `id` column header (case-insensitive), paired with `text` (or `description`):
 
 ```csv
-id,title,description,priority
-REQ-001,Over-current protection,Trigger shutdown if current exceeds 2.0 A,HIGH
-REQ-002,Watchdog heartbeat,Periodic timer within 500 ms,MEDIUM
+id,text
+REQ-DOG-001,Dogs must be able to bark
+REQ-CAT-001,Cats must be able to purr when content
 ```
 
 ### 3. YAML (`requirements.yaml`)
@@ -44,12 +52,10 @@ Requires `pyyaml` (installed automatically if using `docs` or `dev` dependency g
 
 ```yaml
 requirements:
-  - id: REQ-001
-    title: Over-current protection
-    priority: HIGH
-  - id: REQ-002
-    title: Watchdog heartbeat
-    priority: MEDIUM
+  - id: REQ-DOG-001
+    text: Dogs must be able to bark
+  - id: REQ-CAT-001
+    text: Cats must be able to purr when content
 ```
 
 ---

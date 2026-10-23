@@ -56,10 +56,10 @@ Decorate test functions or classes to associate them with one or more requiremen
 from pytest_verifies import verifies
 
 
-@verifies("REQ-PWR-001", "REQ-PWR-002", description="Power rail voltage tolerance")
-def test_voltage_limits():
-    measured_v = 5.01
-    assert 4.95 <= measured_v <= 5.05
+@verifies("REQ-DOG-001", "REQ-DOG-002", description="Dogs must be friendly and able to bark")
+def test_dog_attributes():
+    dog = {"name": "Buster", "species": "Canis familiaris", "barks": True}
+    assert dog["barks"] is True
 ```
 
 ### 3.2 Single-Line Context Manager
@@ -70,10 +70,10 @@ Verify fine-grained inline statements while preserving full assertion diffs:
 from pytest_verifies import verifies
 
 
-def test_network_packet():
-    packet = {"protocol": "TCP", "port": 443}
-    with verifies("REQ-NET-010"):
-        assert packet["port"] == 443
+def test_cat_purring():
+    cat = {"name": "Whiskers", "purring": True}
+    with verifies("REQ-CAT-001"):
+        assert cat["purring"] is True
 ```
 
 ### 3.3 Soft Assertions & Objective Evidence
@@ -84,24 +84,23 @@ Evaluate multiple requirements within a single test execution without early term
 from pytest_verifies import verifies
 
 
-def test_environmental_limits():
-    ambient_temp_c = 72.4
-    core_voltage_v = 1.18
+def test_dog_health_and_energy():
+    dog = {"name": "Buster", "happy": True, "tail_wags_per_min": 120}
 
     # Block 1: Soft assertion with static objective evidence
     with verifies(
-        "REQ-ENV-001",
-        description="Operating temperature under 85 °C",
+        "REQ-DOG-002",
+        description="Dogs must wag their tails when happy",
         soft=True,
-        evidence={"ambient_temp_c": ambient_temp_c, "limit_c": 85.0},
+        evidence={"dog_name": dog["name"], "happy": dog["happy"]},
     ):
-        assert ambient_temp_c < 85.0
+        assert dog["happy"] is True
 
-    # Block 2: Execution continues even if REQ-ENV-001 fails
-    with verifies("REQ-PWR-003", soft=True) as ctx:
-        ctx.attach("core_voltage_v", core_voltage_v)
-        ctx.record_evidence({"calibration_offset": 0.02})
-        assert 1.15 <= core_voltage_v <= 1.25
+    # Block 2: Execution continues even if Block 1 fails
+    with verifies("REQ-DOG-003", soft=True) as ctx:
+        ctx.attach("tail_wags_per_min", dog["tail_wags_per_min"])
+        ctx.record_evidence({"breed": "Golden Retriever"})
+        assert dog["tail_wags_per_min"] > 60
 ```
 
 ### 3.4 Parametrised Tests
@@ -114,39 +113,40 @@ from pytest_verifies import verifies
 
 
 @pytest.mark.parametrize(
-    "baud_rate",
+    "animal,sound",
     [
-        pytest.param(9600, marks=verifies("REQ-COM-001")),
-        pytest.param(115200, marks=verifies("REQ-COM-002")),
+        pytest.param("dog", "woof", marks=verifies("REQ-DOG-001")),
+        pytest.param("cat", "meow", marks=verifies("REQ-CAT-001")),
+        pytest.param("puppy", "yip", marks=verifies("REQ-DOG-001")),
     ],
 )
-def test_serial_baud(baud_rate):
-    assert baud_rate in (9600, 115200)
+def test_pet_sounds(animal, sound):
+    pet_sounds = {"dog": "woof", "cat": "meow", "puppy": "yip"}
+    assert pet_sounds[animal] == sound
 ```
 
 ### 3.5 Test Procedure Steps & Action Steps
 
-Formal test protocols often require tracking discrete step IDs (`STEP-01`, `1.1`), including pure **Action Steps** (stimulus/setup) and **Verification Steps** (checking requirements):
+Test protocols often require tracking discrete step IDs (`STEP-01`, `1.1`), including **Action Steps** (preparing state) and **Verification Steps** (checking requirements):
 
 ```python
 from pytest_verifies import step, verifies
 
 
-def test_motor_speed_control():
-    # Action step: Setup stimulus without validating a requirement
-    with step("STEP-01", description="Power on inverter and spin motor"):
-        inverter.power_on()
-        motor.set_target_rpm(3000)
+def test_puppy_training_routine():
+    # Action step: Prepare treat and call puppy
+    with step("STEP-01", description="Fill treat pouch and call puppy"):
+        puppy = {"name": "Buster", "tricks": []}
 
-    # Verification step: Directly validates REQ-MOT-001
-    with step(
-        "STEP-02", description="Verify steady-state RPM within +/- 1%", verifies="REQ-MOT-001"
-    ):
-        assert 2970 <= motor.measured_rpm <= 3030
+    # Verification step: Directly validates REQ-DOG-004
+    with step("STEP-02", description="Verify puppy sits on command", verifies="REQ-DOG-004"):
+        puppy["tricks"].append("sit")
+        assert "sit" in puppy["tricks"]
 
     # Verification step with verifies(..., step=...)
-    with verifies("REQ-MOT-002", step="STEP-03", description="Verify current draw under load"):
-        assert motor.current_draw_a < 15.0
+    with verifies("REQ-DOG-002", step="STEP-03", description="Verify puppy wags tail after treat"):
+        tail_wagging = True
+        assert tail_wagging is True
 ```
 
 ---
@@ -155,7 +155,7 @@ def test_motor_speed_control():
 
 | Option | Ini Configuration | Description |
 | :--- | :--- | :--- |
-| `--req="PATTERN"` | — | Comma-separated requirement IDs or glob patterns to filter tests (e.g. `--req="REQ-PWR-*,REQ-COM-001"`). |
+| `--req="PATTERN"` | — | Comma-separated requirement IDs or glob patterns to filter tests (e.g. `--req="REQ-DOG-*,REQ-CAT-001"`). |
 | `--verifies-out=DIR` | `verifies_out = DIR` | Directory to output `.jsonl` execution shards. |
 | `--verifies-stage=NAME` | `verifies_stage = NAME` | Stage label for execution shard (default: `"default"`). |
 | `--verifies-baseline=PATH` | `verifies_baseline = PATH` | Path to baseline requirement manifest (`.json`, `.csv`, `.yaml`). |
@@ -171,23 +171,19 @@ def test_motor_speed_control():
 
 ## 5. Baseline Requirement Manifests
 
-Baseline manifests declare formal specifications against which automated tests are verified.
+Baseline manifests declare formal specifications against which automated tests are verified. Baseline requirements need only an `id` and a requirement statement `text` (or `description`).
 
 ### JSON Manifest (`requirements.json`)
 ```json
 {
   "requirements": [
     {
-      "id": "REQ-001",
-      "title": "Power Rail Tolerance",
-      "description": "System shall maintain 5.0 V +/- 2%",
-      "priority": "HIGH"
+      "id": "REQ-DOG-001",
+      "text": "Dogs must be able to bark"
     },
     {
-      "id": "REQ-002",
-      "title": "Thermal Cutoff",
-      "description": "Cutoff threshold at 85 °C",
-      "priority": "CRITICAL"
+      "id": "REQ-CAT-001",
+      "text": "Cats must be able to purr when content"
     }
   ]
 }
@@ -195,22 +191,18 @@ Baseline manifests declare formal specifications against which automated tests a
 
 ### CSV Manifest (`requirements.csv`)
 ```csv
-id,title,description,priority
-REQ-001,Power Rail Tolerance,System shall maintain 5.0 V +/- 2%,HIGH
-REQ-002,Thermal Cutoff,Cutoff threshold at 85 °C,CRITICAL
+id,text
+REQ-DOG-001,Dogs must be able to bark
+REQ-CAT-001,Cats must be able to purr when content
 ```
 
 ### YAML Manifest (`requirements.yaml`)
 ```yaml
 requirements:
-  - id: REQ-001
-    title: Power Rail Tolerance
-    description: System shall maintain 5.0 V +/- 2%
-    priority: HIGH
-  - id: REQ-002
-    title: Thermal Cutoff
-    description: Cutoff threshold at 85 °C
-    priority: CRITICAL
+  - id: REQ-DOG-001
+    text: Dogs must be able to bark
+  - id: REQ-CAT-001
+    text: Cats must be able to purr when content
 ```
 
 ---
@@ -227,7 +219,7 @@ uv run pytest tests/unit --verifies-out=.verifies --verifies-stage=unit
 # Integration test tier
 uv run pytest tests/integration --verifies-out=.verifies --verifies-stage=integration
 
-# Hardware-in-the-loop / System test tier
+# End-to-end / System test tier
 uv run pytest tests/system --verifies-out=.verifies --verifies-stage=system
 ```
 

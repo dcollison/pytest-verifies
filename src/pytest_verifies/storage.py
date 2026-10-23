@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import platform
+import re
 import socket
 import subprocess
 import uuid
@@ -78,8 +79,10 @@ def write_shard(
     now_utc = datetime.now(timezone.utc)
     timestamp_compact = now_utc.strftime("%Y%m%dT%H%M%SZ")
     uuid8 = actual_run_id.replace("-", "")[:8]
-    filename = f"verifies.{stage}.{timestamp_compact}.{uuid8}.jsonl"
+    safe_stage = re.sub(r"[^A-Za-z0-9_.-]+", "_", stage).strip("._") or "default"
+    filename = f"verifies.{safe_stage}.{timestamp_compact}.{uuid8}.jsonl"
     file_path = dest_dir / filename
+    tmp_path = dest_dir / f".{filename}.{uuid.uuid4().hex[:8]}.tmp"
 
     git_sha, git_dirty = get_git_info()
 
@@ -95,12 +98,17 @@ def write_shard(
         "hostname": socket.gethostname(),
     }
 
-    with file_path.open("w", encoding="utf-8") as f:
-        f.write(json.dumps(metadata) + "\n")
-        for record in records:
-            record_dict = record.to_dict()
-            record_dict["type"] = "record"
-            f.write(json.dumps(record_dict) + "\n")
+    try:
+        with tmp_path.open("w", encoding="utf-8") as f:
+            f.write(json.dumps(metadata, default=str) + "\n")
+            for record in records:
+                record_dict = record.to_dict()
+                record_dict["type"] = "record"
+                f.write(json.dumps(record_dict, default=str) + "\n")
+        tmp_path.replace(file_path)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
     return file_path
 
@@ -122,8 +130,7 @@ def read_shards(
         if path_obj.is_file():
             discovered_files.append(path_obj)
         elif path_obj.is_dir():
-            discovered_files.extend(sorted(path_obj.glob("*.jsonl")))
-            discovered_files.extend(sorted(path_obj.glob("**/*.jsonl")))
+            discovered_files.extend(sorted(path_obj.rglob("*.jsonl")))
 
     # Deduplicate while preserving order
     unique_files: list[Path] = []
@@ -149,11 +156,17 @@ def read_shards(
                     except json.JSONDecodeError:
                         continue
 
+                    if not isinstance(entry, dict):
+                        continue
+
                     entry_type = entry.get("type")
                     if entry_type == "metadata":
                         runs.append(entry)
                     elif entry_type == "record":
-                        records.append(VerificationRecord.from_dict(entry))
+                        try:
+                            records.append(VerificationRecord.from_dict(entry))
+                        except (ValueError, TypeError):
+                            continue
         except OSError:
             continue
 
@@ -205,17 +218,15 @@ def consolidate_requirements(
             orphan_count += 1
 
         req_baseline = baseline.get(req_id) if baseline else None
-        title = req_baseline.title if req_baseline else ""
-        description = req_baseline.description if req_baseline else ""
-        priority = req_baseline.priority if req_baseline else ""
+        text = req_baseline.text if req_baseline else ""
 
         req_records = records_by_req.get(req_id, [])
 
-        # If description is missing from baseline, infer from record if available
-        if not description:
+        # If text is missing from baseline, infer from record description if available
+        if not text:
             for r in req_records:
                 if r.description:
-                    description = r.description
+                    text = r.description
                     break
 
         # 2. Determine consolidated status
@@ -262,9 +273,7 @@ def consolidate_requirements(
 
         consolidated = ConsolidatedRequirement(
             req_id=req_id,
-            title=title,
-            description=description,
-            priority=priority,
+            text=text,
             in_baseline=in_baseline,
             is_orphan=is_orphan,
             status=status,

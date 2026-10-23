@@ -8,6 +8,7 @@ caller location capture, and dynamic objective evidence attachment.
 from __future__ import annotations
 
 import collections.abc
+import copy
 import inspect
 import time
 from contextvars import ContextVar
@@ -17,12 +18,6 @@ from typing import Any, Generator, Iterable
 
 import pytest
 
-try:
-    from _pytest.outcomes import Skipped, XFailed
-except ImportError:  # pragma: no cover
-    Skipped = ()  # type: ignore[assignment, misc]
-    XFailed = ()  # type: ignore[assignment, misc]
-
 from pytest_verifies.models import VerificationRecord
 
 # Context variables for isolating state across async/threaded/synchronous test execution
@@ -31,9 +26,38 @@ _current_test_stage: ContextVar[str] = ContextVar("_current_test_stage", default
 _active_records: ContextVar[list[VerificationRecord]] = ContextVar("_active_records")
 _soft_failures: ContextVar[list[str]] = ContextVar("_soft_failures")
 _global_soft: ContextVar[bool] = ContextVar("_global_soft", default=False)
+_last_unhandled_req_exc: ContextVar[BaseException | None] = ContextVar(
+    "_last_unhandled_req_exc", default=None
+)
+_has_action_soft_failure: ContextVar[bool] = ContextVar("_has_action_soft_failure", default=False)
 
 
-class _VerifiesContext(collections.abc.Collection):
+def flatten_req_ids(*items: Any) -> list[str]:
+    """Flatten strings and iterables of strings into a list of non-empty requirement IDs."""
+    flattened: list[str] = []
+    for item in items:
+        if item is None:
+            continue
+        if isinstance(item, str):
+            cleaned = item.strip()
+            if cleaned:
+                flattened.append(cleaned)
+        elif isinstance(item, collections.abc.Iterable):
+            for sub in item:
+                if isinstance(sub, str) and sub.strip():
+                    flattened.append(sub.strip())
+    return flattened
+
+
+def _safe_deepcopy(value: Any) -> Any:
+    """Deep-copy mutable structures, falling back to the original object if uncopyable."""
+    try:
+        return copy.deepcopy(value)
+    except Exception:
+        return value
+
+
+class _VerifiesContext(collections.abc.Collection[pytest.MarkDecorator]):
     """Unified handler operating as both a pytest decorator and a context manager."""
 
     def __init__(
@@ -46,16 +70,7 @@ class _VerifiesContext(collections.abc.Collection):
         evidence: Any = None,
     ) -> None:
         """Initialise verification context with requirement identifiers, step ID, and optional metadata."""
-        flattened: list[str] = []
-        for item in req_ids:
-            if isinstance(item, str):
-                cleaned = item.strip()
-                if cleaned:
-                    flattened.append(cleaned)
-            elif isinstance(item, collections.abc.Iterable):
-                for sub in item:
-                    if isinstance(sub, str) and sub.strip():
-                        flattened.append(sub.strip())
+        flattened = flatten_req_ids(*req_ids)
 
         raw_step = step_id if step_id is not None else step
         cleaned_step = (
@@ -69,7 +84,8 @@ class _VerifiesContext(collections.abc.Collection):
         self.step_id: str | None = cleaned_step
         self.description: str | None = description
         self.soft: bool = soft
-        self.evidence: Any = evidence
+        self.evidence: Any = _safe_deepcopy(evidence)
+        self._evidence_stack: list[Any] = []
         self.location: str = ""
         self._start_time: float = 0.0
 
@@ -83,25 +99,20 @@ class _VerifiesContext(collections.abc.Collection):
         """Set the step identifier."""
         self.step_id = str(value).strip() if value is not None and str(value).strip() else None
 
-    def set_step(self, step_id: str) -> _VerifiesContext:
-        """Set the step identifier dynamically during execution."""
-        self.step = step_id
-        return self
-
     @property
     def mark_decorator(self) -> pytest.MarkDecorator:
         """Pytest MarkDecorator representing this verification marker."""
-        return pytest.mark.verifies(  # type: ignore[no-any-return]
+        return pytest.mark.verifies(
             *self.req_ids,
             step_id=self.step_id,
             description=self.description,
-            evidence=self.evidence,
+            evidence=_safe_deepcopy(self.evidence),
         )
 
     @property
     def mark(self) -> pytest.Mark:
         """Underlying pytest Mark instance."""
-        return self.mark_decorator.mark  # type: ignore[no-any-return]
+        return self.mark_decorator.mark
 
     @property
     def name(self) -> str:
@@ -110,22 +121,22 @@ class _VerifiesContext(collections.abc.Collection):
 
     def attach(self, key: str, value: Any) -> _VerifiesContext:
         """Attach a single key-value evidence entry dynamically during execution."""
+        copied_val = _safe_deepcopy(value)
         if self.evidence is None:
-            self.evidence = {key: value}
+            self.evidence = {key: copied_val}
         elif isinstance(self.evidence, dict):
-            self.evidence[key] = value
+            self.evidence[key] = copied_val
         else:
-            self.evidence = {"original_evidence": self.evidence, key: value}
+            self.evidence = {"original_evidence": self.evidence, key: copied_val}
         return self
 
     def record_evidence(self, data: Any) -> _VerifiesContext:
         """Record or merge structured objective evidence during execution."""
-        if isinstance(data, dict) and isinstance(self.evidence, dict):
-            self.evidence.update(data)
-        elif self.evidence is None:
-            self.evidence = data
+        copied = _safe_deepcopy(data)
+        if isinstance(copied, dict) and isinstance(self.evidence, dict):
+            self.evidence.update(copied)
         else:
-            self.evidence = data
+            self.evidence = copied
         return self
 
     # Decorator & collections.abc.Collection implementation for pytest.param compatibility
@@ -154,6 +165,9 @@ class _VerifiesContext(collections.abc.Collection):
                 "The 'verifies' context manager can only be used within an active pytest test context."
             )
 
+        self._evidence_stack.append(_safe_deepcopy(self.evidence))
+        self.evidence = _safe_deepcopy(self.evidence)
+
         # Inspect caller frame to capture source location
         frame = inspect.currentframe()
         caller_frame = frame.f_back if frame else None
@@ -181,32 +195,28 @@ class _VerifiesContext(collections.abc.Collection):
         duration = max(0.0, time.perf_counter() - self._start_time)
         status: str
         message: str | None = None
+        raw_msg = str(exc_val).strip() if exc_val is not None else ""
 
         if exc_type is None:
             status = "PASSED"
         elif issubclass(exc_type, AssertionError):
             status = "FAILED"
-            message = str(exc_val).strip() if exc_val is not None else "AssertionError"
-        elif (isinstance(Skipped, type) and issubclass(exc_type, Skipped)) or (
-            hasattr(pytest, "skip")
-            and hasattr(pytest.skip, "Exception")
-            and issubclass(exc_type, pytest.skip.Exception)
-        ):
+            message = raw_msg or "AssertionError"
+        elif issubclass(exc_type, pytest.skip.Exception):
             status = "SKIPPED"
-            message = str(exc_val).strip() if exc_val is not None else None
-        elif (isinstance(XFailed, type) and issubclass(exc_type, XFailed)) or (
-            hasattr(pytest, "xfail")
-            and hasattr(pytest.xfail, "Exception")
-            and issubclass(exc_type, pytest.xfail.Exception)
-        ):
+            message = raw_msg or None
+        elif issubclass(exc_type, pytest.xfail.Exception):
             status = "XFAILED"
-            message = str(exc_val).strip() if exc_val is not None else None
+            message = raw_msg or "XFailed"
         else:
             status = "ERROR"
-            message = str(exc_val).strip() if exc_val is not None else exc_type.__name__
+            message = raw_msg or exc_type.__name__
 
         nodeid = _current_test_nodeid.get() or "unknown"
         stage = _current_test_stage.get()
+        recorded_evidence = _safe_deepcopy(self.evidence)
+        if self._evidence_stack:
+            self.evidence = self._evidence_stack.pop()
 
         record = VerificationRecord(
             nodeid=nodeid,
@@ -217,7 +227,7 @@ class _VerifiesContext(collections.abc.Collection):
             location=self.location,
             description=self.description,
             message=message,
-            evidence=self.evidence,
+            evidence=recorded_evidence,
             duration_s=duration,
             timestamp=datetime.now(timezone.utc).isoformat(),
         )
@@ -231,16 +241,21 @@ class _VerifiesContext(collections.abc.Collection):
         # Handle soft assertion suppression
         is_soft = self.soft or _global_soft.get()
         if is_soft and exc_type is not None and issubclass(exc_type, AssertionError):
-            formatted_exc = str(exc_val).strip() if exc_val is not None else "AssertionError"
+            formatted_exc = message or "AssertionError"
             step_tag = f" [Step: {self.step_id}]" if self.step_id else ""
             req_tag = f"[{', '.join(self.req_ids)}]" if self.req_ids else "[ACTION]"
             failure_entry = f"{req_tag}{step_tag} ({self.location}):\n{formatted_exc}"
+            if not self.req_ids:
+                _has_action_soft_failure.set(True)
             try:
                 soft_list = _soft_failures.get()
                 soft_list.append(failure_entry)
             except LookupError:
                 pass
             return True  # Suppress AssertionError to allow subsequent checks to execute
+
+        if exc_val is not None and self.req_ids:
+            _last_unhandled_req_exc.set(exc_val)
 
         return False
 
@@ -278,7 +293,7 @@ def verifies(
 
 def step(
     step_id: str,
-    description: str | None = None,
+    description: str | Iterable[str] | None = None,
     *req_ids: str | Iterable[str],
     verifies: str | Iterable[str] | None = None,
     soft: bool = False,
@@ -288,7 +303,7 @@ def step(
 
     Args:
         step_id: Unique step identifier (e.g. "STEP-01", "STEP-1.2").
-        description: Optional human-readable action or check description.
+        description: Optional human-readable action or check description, or iterable of requirement IDs.
         *req_ids: Optional requirement identifiers verified by this step.
         verifies: Optional requirement identifier or collection of identifiers.
         soft: If True, assertion failures are logged without terminating the test.
@@ -297,17 +312,20 @@ def step(
     Returns:
         _VerifiesContext: Step context manager and decorator.
     """
-    all_reqs: list[str | Iterable[str]] = list(req_ids)
-    if verifies is not None:
-        if isinstance(verifies, str):
-            all_reqs.append(verifies)
-        elif isinstance(verifies, collections.abc.Iterable):
-            all_reqs.extend(verifies)
+    actual_desc: str | None
+    extra_reqs: list[str | Iterable[str]] = []
+    if description is not None and not isinstance(description, str):
+        actual_desc = None
+        extra_reqs.append(description)
+    else:
+        actual_desc = description
 
     return _VerifiesContext(
-        *all_reqs,
+        *extra_reqs,
+        *req_ids,
+        *([] if verifies is None else [verifies]),
         step_id=step_id,
-        description=description,
+        description=actual_desc,
         soft=soft,
         evidence=evidence,
     )

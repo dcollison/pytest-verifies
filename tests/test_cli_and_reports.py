@@ -24,14 +24,11 @@ def test_baseline_loader_formats(tmp_path: Path) -> None:
                 "requirements": [
                     {
                         "id": "REQ-001",
-                        "title": "Power Rail",
-                        "description": "5V +/- 2%",
-                        "priority": "HIGH",
+                        "text": "Dogs must be able to bark",
                     },
                     {
                         "id": "REQ-002",
-                        "title": "Current Draw",
-                        "priority": "MEDIUM",
+                        "text": "Cats must be able to purr",
                     },
                 ]
             }
@@ -40,31 +37,40 @@ def test_baseline_loader_formats(tmp_path: Path) -> None:
     )
     base_json = load_baseline(json_path)
     assert len(base_json) == 2
-    assert base_json["REQ-001"].title == "Power Rail"
-    assert base_json["REQ-001"].priority == "HIGH"
+    assert base_json["REQ-001"].text == "Dogs must be able to bark"
+    assert base_json["REQ-002"].text == "Cats must be able to purr"
 
-    # 2. CSV Format
+    # 2. CSV Format with id and text
     csv_path = tmp_path / "baseline.csv"
     csv_path.write_text(
-        "id,title,description,priority\n"
-        "REQ-003,Thermal Cutoff,Shutdown at 85C,CRITICAL\n"
-        "REQ-004,Memory Isolation,Protected memory segments,HIGH\n",
+        "id,text\n"
+        "REQ-003,Puppies must take afternoon naps\n"
+        "REQ-004,Kittens must chase yarn balls\n",
         encoding="utf-8",
     )
     base_csv = load_baseline(csv_path)
     assert len(base_csv) == 2
-    assert base_csv["REQ-003"].title == "Thermal Cutoff"
-    assert base_csv["REQ-003"].priority == "CRITICAL"
+    assert base_csv["REQ-003"].text == "Puppies must take afternoon naps"
+    assert base_csv["REQ-004"].text == "Kittens must chase yarn balls"
+
+    # CSV with alternative 'description' header
+    csv_desc_path = tmp_path / "baseline_desc.csv"
+    csv_desc_path.write_text(
+        "id,description\nREQ-005,Dogs must wag their tails\n",
+        encoding="utf-8",
+    )
+    base_desc = load_baseline(csv_desc_path)
+    assert base_desc["REQ-005"].text == "Dogs must wag their tails"
 
     # 3. YAML Format
     yaml_path = tmp_path / "baseline.yaml"
     yaml_path.write_text(
-        "requirements:\n  - id: REQ-005\n    title: Boot Security\n    priority: HIGH\n",
+        "requirements:\n  - id: REQ-006\n    text: Cats must land on their feet\n",
         encoding="utf-8",
     )
     base_yaml = load_baseline(yaml_path)
     assert len(base_yaml) == 1
-    assert base_yaml["REQ-005"].title == "Boot Security"
+    assert base_yaml["REQ-006"].text == "Cats must land on their feet"
 
     # 4. Error cases
     non_existent = tmp_path / "missing.json"
@@ -87,9 +93,12 @@ def test_multi_run_shard_combining_and_stage_consolidation(pytester: pytest.Pyte
         json.dumps(
             {
                 "requirements": [
-                    {"id": "REQ-001", "title": "Over-current protection"},
-                    {"id": "REQ-002", "title": "Watchdog timer heartbeat"},
-                    {"id": "REQ-003", "title": "Secure enclave key storage"},
+                    {
+                        "id": "REQ-001",
+                        "text": "Dogs must be able to bark",
+                    },
+                    {"id": "REQ-002", "text": "Dogs must wag their tails"},
+                    {"id": "REQ-003", "text": "Cats must be able to purr"},
                 ]
             }
         ),
@@ -124,7 +133,7 @@ def test_multi_run_shard_combining_and_stage_consolidation(pytester: pytest.Pyte
 
         def test_system_req1():
             with verifies("REQ-001"):
-                assert False, "Transient voltage spike during system test"
+                assert False, "Puppy distracted by butterfly during park test"
         """
     )
     result_system = pytester.runpytest(
@@ -164,7 +173,7 @@ def test_multi_run_shard_combining_and_stage_consolidation(pytester: pytest.Pyte
     assert reqs["REQ-001"]["status"] == "FAILED"
     assert reqs["REQ-001"]["stages_verified"] == {"unit": "VERIFIED", "system": "FAILED"}
     assert len(reqs["REQ-001"]["failure_messages"]) == 1
-    assert "Transient voltage spike" in reqs["REQ-001"]["failure_messages"][0]
+    assert "Puppy distracted by butterfly" in reqs["REQ-001"]["failure_messages"][0]
 
     # REQ-002 passed in unit -> overall consolidated status VERIFIED
     assert reqs["REQ-002"]["status"] == "VERIFIED"
@@ -198,7 +207,7 @@ def test_multi_run_shard_combining_and_stage_consolidation(pytester: pytest.Pyte
     assert "# Requirements Traceability Matrix (RTM)" in md_content
     assert "## Summary Scorecard" in md_content
     assert "REQ-001" in md_content
-    assert "Transient voltage spike" in md_content
+    assert "Puppy distracted by butterfly" in md_content
 
     # Verify HTML output
     assert html_out.is_file()
@@ -215,7 +224,7 @@ def test_cli_disallow_orphans_quality_gate(pytester: pytest.Pytester) -> None:
     shards_dir = pytester.path / "shards"
     baseline_file = pytester.path / "baseline.json"
     baseline_file.write_text(
-        json.dumps({"requirements": [{"id": "REQ-VALID-01", "title": "Valid"}]}),
+        json.dumps({"requirements": [{"id": "REQ-VALID-01", "text": "Dogs must bark"}]}),
         encoding="utf-8",
     )
 
@@ -332,9 +341,9 @@ def test_console_summary_color_and_partial(pytester: pytest.Pytester) -> None:
         json.dumps(
             {
                 "requirements": [
-                    {"id": "REQ-PASS", "title": "Passing Req"},
-                    {"id": "REQ-FAIL", "title": "Failing Req"},
-                    {"id": "REQ-PART", "title": "Partial Req"},
+                    {"id": "REQ-PASS", "text": "Happy golden retriever"},
+                    {"id": "REQ-FAIL", "text": "Grumpy guard dog"},
+                    {"id": "REQ-PART", "text": "Curious ginger kitten"},
                 ]
             }
         ),
@@ -381,3 +390,165 @@ def test_console_summary_color_and_partial(pytester: pytest.Pytester) -> None:
             "*Total: 3*Verified: 2*",
         ]
     )
+
+
+def test_baseline_loader_edge_cases(tmp_path: Path) -> None:
+    """Verify baseline loader handles title/requirement keys, dict formats, None values, and invalid inputs."""
+    # 1. Key-value dict format with title, requirement, scalar, None, and whitespace fallback
+    dict_json = tmp_path / "dict_baseline.json"
+    dict_json.write_text(
+        json.dumps(
+            {
+                "REQ-KV-1": {"text": "   ", "title": "Title based text"},
+                "REQ-KV-2": {"requirement": "Requirement key text"},
+                "REQ-KV-3": "Scalar text",
+                "REQ-KV-4": None,
+            }
+        ),
+        encoding="utf-8",
+    )
+    loaded = load_baseline(dict_json)
+    assert loaded["REQ-KV-1"].text == "Title based text"
+    assert loaded["REQ-KV-2"].text == "Requirement key text"
+    assert loaded["REQ-KV-3"].text == "Scalar text"
+    assert loaded["REQ-KV-4"].text == ""
+
+    # 2. Empty key in dict format must raise ValueError
+    empty_key_json = tmp_path / "empty_key.json"
+    empty_key_json.write_text(json.dumps({"   ": "Invalid empty key"}), encoding="utf-8")
+    with pytest.raises(ValueError, match="empty requirement ID"):
+        load_baseline(empty_key_json)
+
+    # 3. Empty YAML file (yaml.safe_load returns None) must raise ValueError
+    empty_yaml = tmp_path / "empty.yaml"
+    empty_yaml.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError, match="Expected dict or list"):
+        load_baseline(empty_yaml)
+
+    # 4. CSV with whitespace-only trailing rows (both 1-column and multi-column)
+    csv_file = tmp_path / "trailing_ws.csv"
+    csv_file.write_text("id,title\nREQ-CSV-1,CSV Title\n   \n  ,  \n", encoding="utf-8")
+    csv_loaded = load_baseline(csv_file)
+    assert len(csv_loaded) == 1
+    assert csv_loaded["REQ-CSV-1"].text == "CSV Title"
+
+    csv_1col = tmp_path / "single_col.csv"
+    csv_1col.write_text("id\nREQ-1COL\n   \n", encoding="utf-8")
+    csv_1col_loaded = load_baseline(csv_1col)
+    assert list(csv_1col_loaded.keys()) == ["REQ-1COL"]
+
+    # 5. CLI --disallow-orphans without --baseline must fail with exit code 1
+    assert cli_main(["combine", str(tmp_path), "--disallow-orphans"]) == 1
+
+
+def test_shard_stage_sanitisation_and_malformed_jsonl_resilience(tmp_path: Path) -> None:
+    """Verify write_shard sanitises stage names for Windows filenames and read_shards ignores malformed entries."""
+    from pytest_verifies.models import VerificationRecord
+    from pytest_verifies.storage import read_shards, write_shard
+
+    shards_dir = tmp_path / "shards"
+    rec = VerificationRecord(
+        nodeid="tests/test_sample.py::test_one",
+        req_ids=["REQ-SAFE-1"],
+        status="PASSED",
+        stage="ci/linux:py312\\x64",
+    )
+    shard_path = write_shard(shards_dir, stage="ci/linux:py312\\x64", records=[rec])
+    assert shard_path.is_file()
+    assert ":" not in shard_path.name
+    assert "/" not in shard_path.name
+    assert "\\" not in shard_path.name
+
+    # Append malformed lines, non-dict JSON values, invalid duration_s, and null/whitespace fields
+    with shard_path.open("a", encoding="utf-8") as f:
+        f.write("{invalid json\n")
+        f.write("[1, 2, 3]\n")
+        f.write('"just a string"\n')
+        f.write("42\n")
+        f.write(
+            json.dumps(
+                {
+                    "type": "record",
+                    "nodeid": "test_bad_duration",
+                    "req_ids": ["REQ-BAD"],
+                    "status": "PASSED",
+                    "duration_s": "not-a-float",
+                }
+            )
+            + "\n"
+        )
+        f.write(
+            json.dumps(
+                {
+                    "type": "record",
+                    "nodeid": "test_strip_reqs",
+                    "req_ids": ["", "   ", "  REQ-CLEAN-2  "],
+                    "status": "PASSED",
+                    "stage": None,
+                    "location": None,
+                    "step_id": 101,
+                    "timestamp": None,
+                }
+            )
+            + "\n"
+        )
+
+    runs, records = read_shards([shards_dir])
+    assert len(runs) == 1
+    assert runs[0]["stage"] == "ci/linux:py312\\x64"
+    assert len(records) == 2
+    assert records[0].req_ids == ["REQ-SAFE-1"]
+    assert records[1].req_ids == ["REQ-CLEAN-2"]
+    assert records[1].stage == "default"
+    assert records[1].location == ""
+    assert records[1].step_id == "101"
+    assert records[1].timestamp == ""
+
+
+def test_html_partial_filter_and_markdown_table_escaping(tmp_path: Path) -> None:
+    """Verify HTML report includes Partial filter button/logic and Markdown report escapes pipes/newlines."""
+    from pytest_verifies.models import BaselineRequirement, VerificationRecord
+    from pytest_verifies.reporters import generate_html_report, generate_markdown_report
+    from pytest_verifies.storage import consolidate_requirements
+
+    baseline = {
+        "REQ-PIPE-1": BaselineRequirement(
+            id="REQ-PIPE-1",
+            text="Must handle A | B\nand second line",
+        )
+    }
+    records = [
+        VerificationRecord(
+            nodeid="test_mod.py::test_pass",
+            req_ids=["REQ-PIPE-1"],
+            status="PASSED",
+            stage="unit",
+        ),
+        VerificationRecord(
+            nodeid="test_mod.py::test_skip",
+            req_ids=["REQ-PIPE-1"],
+            status="SKIPPED",
+            stage="integration",
+        ),
+        VerificationRecord(
+            nodeid="test_mod.py::test_pass",
+            req_ids=[],
+            step_id="STEP-ACT-1",
+            status="PASSED",
+            description="Step with | pipe\nand newline",
+        ),
+    ]
+
+    report = consolidate_requirements(records, baseline=baseline)
+    assert report.partial_count == 1
+    assert report.requirements[0].is_partial is True
+    assert report.requirements[0].display_status == "PARTIAL"
+
+    html_out = generate_html_report(report)
+    assert 'data-filter="partial">Partial (1)</button>' in html_out
+    assert "status === 'verified' || status === 'partial'" in html_out
+    assert 'data-status="partial"' in html_out
+
+    md_out = generate_markdown_report(report)
+    assert r"Must handle A \| B and second line" in md_out
+    assert r"Step with \| pipe and newline" in md_out

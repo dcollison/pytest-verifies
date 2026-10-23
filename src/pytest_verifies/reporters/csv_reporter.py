@@ -14,7 +14,7 @@ def generate_csv_report(report: RTMReport, output_path: str | Path | None = None
     """Generate a tabular CSV representation of the RTM report.
 
     Header schema:
-    req_id,title,status,in_baseline,stages,verified_by_tests,evidence,failure_messages
+    req_id,text,status,in_baseline,stages,steps,verified_by_tests,evidence,failure_messages
 
     Args:
         report: The consolidated RTMReport instance.
@@ -30,7 +30,7 @@ def generate_csv_report(report: RTMReport, output_path: str | Path | None = None
     writer.writerow(
         [
             "req_id",
-            "title",
+            "text",
             "status",
             "in_baseline",
             "stages",
@@ -47,7 +47,7 @@ def generate_csv_report(report: RTMReport, output_path: str | Path | None = None
         )
         steps_str = "; ".join(req.steps)
         tests_str = "; ".join(req.verified_by_tests)
-        evidence_str = json.dumps(req.evidence) if req.evidence else ""
+        evidence_str = json.dumps(req.evidence, default=str) if req.evidence else ""
         failures_str = " | ".join(
             msg.replace("\n", " ").strip() for msg in req.failure_messages if msg
         )
@@ -55,7 +55,7 @@ def generate_csv_report(report: RTMReport, output_path: str | Path | None = None
         writer.writerow(
             [
                 req.req_id,
-                req.title,
+                req.text,
                 req.status,
                 "TRUE" if req.in_baseline else "FALSE",
                 stages_str,

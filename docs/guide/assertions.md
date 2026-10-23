@@ -14,21 +14,24 @@ Use `@verifies(...)` on test functions or test classes:
 from pytest_verifies import verifies
 
 
-@verifies("REQ-SYS-001", "REQ-SYS-002", description="Subsystem boot sequence")
-def test_subsystem_boot():
-    assert True
+@verifies("REQ-DOG-001", "REQ-DOG-002", description="Golden retrievers are friendly dogs")
+def test_retriever_temperament():
+    dog = {"breed": "Golden Retriever", "friendly": True}
+    assert dog["friendly"] is True
 ```
 
 When decorating a test class, all test methods within the class automatically inherit verification tracking for the specified requirements:
 
 ```python
-@verifies("REQ-COMMS-001")
-class TestSerialComms:
-    def test_parity(self):
-        assert True
+@verifies("REQ-CAT-001")
+class TestCatAgility:
+    def test_land_on_feet(self):
+        cat = {"lands_on_feet": True}
+        assert cat["lands_on_feet"] is True
 
-    def test_stop_bits(self):
-        assert True
+    def test_silent_stalking(self):
+        cat = {"stealthy": True}
+        assert cat["stealthy"] is True
 ```
 
 ---
@@ -41,23 +44,22 @@ Use `with verifies(...)` for statement-level or multi-block verification:
 from pytest_verifies import verifies
 
 
-def test_packet_flow():
+def test_dog_and_cat_habits():
     # Single-line check
-    with verifies("REQ-NET-001"):
-        assert 1 == 1
+    with verifies("REQ-DOG-001"):
+        assert "bark" != "meow"
 
     # Multi-statement block
-    with verifies("REQ-NET-002", description="Payload checksum validation"):
-        calculated_crc = 0xABCD
-        expected_crc = 0xABCD
-        assert calculated_crc == expected_crc
+    with verifies("REQ-CAT-002", description="Cats take multiple naps per day"):
+        nap_count = 5
+        assert nap_count >= 3
 ```
 
 ---
 
 ## 3. Soft Assertions
 
-In standard Pytest execution, the first failed assertion aborts the test function. In engineering verification, it is often necessary to check several independent safety limits even if an earlier check fails.
+In standard Pytest execution, the first failed assertion aborts the test function. In verification testing, it is often desirable to check several independent qualities within a single test without aborting after the first failure.
 
 Enable soft assertions per block with `soft=True`, or globally across all blocks with `--verifies-soft`:
 
@@ -65,16 +67,18 @@ Enable soft assertions per block with `soft=True`, or globally across all blocks
 from pytest_verifies import verifies
 
 
-def test_safety_envelope():
+def test_cat_qualities():
+    cat = {"is_napping": True, "purr_volume_db": 45, "caught_laser": False}
+
     # Block 1 fails softly; execution continues!
-    with verifies("REQ-LIM-001", soft=True):
-        assert 10 > 20
+    with verifies("REQ-CAT-001", soft=True):
+        assert cat["caught_laser"] is True, "The red dot eluded the cat once again!"
 
     # Block 2 executes and records VERIFIED
-    with verifies("REQ-LIM-002", soft=True):
-        assert 50 == 50
+    with verifies("REQ-CAT-002", soft=True):
+        assert cat["is_napping"] is True
 
-    # At the end of test_safety_envelope, Pytest consolidates failures and fails the test.
+    # At the end of test_cat_qualities, Pytest consolidates failures and fails the test.
 ```
 
 ---
@@ -87,27 +91,27 @@ Audit frameworks require verifiable proof of test outcomes. Objective evidence c
 from pytest_verifies import verifies
 
 
-def test_sensor_telemetry():
+def test_dog_fetch_telemetry():
     # Static evidence dictionary
-    with verifies("REQ-SNS-001", evidence={"sensor_model": "BMP390", "calibrated": True}):
+    with verifies("REQ-DOG-001", evidence={"breed": "Labrador", "good_boy": True}):
         assert True
 
     # Dynamic attachment during runtime
-    with verifies("REQ-SNS-002") as ctx:
-        measured_pressure_hpa = 1013.25
-        ctx.attach("pressure_hpa", measured_pressure_hpa)
-        ctx.record_evidence({"drift_pct": 0.01})
-        assert measured_pressure_hpa > 900.0
+    with verifies("REQ-DOG-002") as ctx:
+        balls_fetched = 7
+        ctx.attach("balls_fetched", balls_fetched)
+        ctx.record_evidence({"tail_wagging": True})
+        assert balls_fetched >= 5
 ```
 
 ---
 
 ## 5. Test Procedure Steps & Action Steps
 
-In formal engineering verification (such as ISO 26262, IEC 62304, or DO-178C test protocols), test specifications define explicit **Step IDs** (e.g. `STEP-01`, `1.1`). These steps fall into two categories:
+Test specifications often define explicit **Step IDs** (e.g. `STEP-01`, `1.1`), which fall into two categories:
 
-1. **Action Steps (Stimulus / Setup):** Perform state transitions, calibration, or stimulus without directly validating a requirement.
-2. **Verification Steps:** Directly assert system behaviour against one or more requirements.
+1. **Action Steps (Setup / Preparation):** Perform setup or state changes without directly validating a requirement.
+2. **Verification Steps:** Directly assert behaviour against one or more requirements.
 
 Import `step` alongside `verifies`:
 
@@ -115,27 +119,31 @@ Import `step` alongside `verifies`:
 from pytest_verifies import step, verifies
 
 
-def test_battery_depletion_sequence():
-    # 1. Pure Action Step: No requirement verified
-    with step("STEP-01", description="Connect battery simulator and set initial SOC"):
-        sim.connect()
-        sim.set_soc(100)
+def test_puppy_training_routine():
+    # 1. Action Step: Prepare treats and call puppy
+    with step("STEP-01", description="Fill treat pouch and call puppy"):
+        puppy = {"name": "Buster", "tricks": []}
 
     # 2. Action Step with Telemetry Evidence
-    with step("STEP-02", description="Discharge at 2C rate") as s:
-        current_a = sim.discharge(rate="2C")
-        s.attach("discharge_current_a", current_a)
+    with step("STEP-02", description="Offer treat to puppy") as s:
+        puppy["tricks"].append("sit")
+        s.attach("treats_given", 1)
 
     # 3. Verification Step using step(..., verifies=...)
-    with step("STEP-03", description="Verify low-charge cutoff trigger", verifies="REQ-BAT-004"):
-        assert sim.cutoff_tripped is True
+    with step(
+        "STEP-03",
+        description="Verify puppy sits on command",
+        verifies="REQ-DOG-003",
+    ):
+        assert "sit" in puppy["tricks"]
 
     # 4. Verification Step using verifies(..., step=...)
-    with verifies("REQ-BAT-005", step="STEP-04", description="Verify low-charge alarm packet"):
-        assert sim.alarm_active("LOW_BATTERY") is True
+    with verifies("REQ-DOG-002", step="STEP-04", description="Verify puppy wags tail when praised"):
+        puppy_happy = True
+        assert puppy_happy is True
 ```
 
 ### Benefits of Step Tracking
-* **Failure Attribution:** If an action step fails (e.g. a timeout during `STEP-01`), the failure report clearly attributes the issue to the action step without falsely recording requirement defects.
+* **Failure Attribution:** If an action step fails (e.g. dropped the bowl during `STEP-01`), the failure report clearly attributes the issue to the action step without falsely recording requirement defects.
 * **Audit Trail:** Reports include a complete test procedure walkthrough table matching your formal verification protocol.
-* **ALM / PLM Synchronization:** Step IDs export directly to the `steps` column in CSV and JSON for tools like Polarion, Jira Xray, and Jama.
+* **Traceability Export:** Step IDs export directly to the `steps` column in CSV and JSON for external reporting tools.

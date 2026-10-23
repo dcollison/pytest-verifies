@@ -143,3 +143,108 @@ def test_disallow_orphans_without_baseline_raises_error(pytester: pytest.Pyteste
     result.stderr.fnmatch_lines(
         ["*ERROR: --verifies-disallow-orphans requires --verifies-baseline to be specified.*"]
     )
+
+
+def test_step_positional_description_and_ast_set_asyncwith_filtering(
+    pytester: pytest.Pytester,
+) -> None:
+    """Verify positional description in step() is not treated as an orphan requirement ID and AST handles sets/AsyncWith."""
+    baseline_path = pytester.path / "baseline.json"
+    baseline_path.write_text(
+        json.dumps(
+            {
+                "requirements": [
+                    {"id": "REQ-BASE-1", "title": "First"},
+                    {"id": "REQ-BASE-2", "requirement": "Second"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    pytester.makepyfile(
+        """
+        from pytest_verifies import step, verifies
+
+        def test_step_positional_args():
+            # Positional description on an action step must NOT be treated as a requirement ID
+            with step("STEP-01", "Prepare test fixtures"):
+                assert True
+
+            # Positional description followed by *req_ids
+            with step("STEP-02", "Check first requirement", "REQ-BASE-1"):
+                assert True
+
+            # Set literal in verifies(...)
+            with verifies({"REQ-BASE-1", "REQ-BASE-2"}):
+                assert True
+        """
+    )
+
+    result = pytester.runpytest(
+        f"--verifies-baseline={baseline_path}",
+        "--verifies-disallow-orphans",
+        "--req=REQ-BASE-2",
+    )
+    result.assert_outcomes(passed=1)
+
+
+def test_dynamic_orphan_caught_in_sessionfinish_without_report_flags(
+    pytester: pytest.Pytester,
+) -> None:
+    """Verify runtime/dynamic orphans fail sessionfinish quality gate even when no report flags are passed."""
+    baseline_path = pytester.path / "baseline.json"
+    baseline_path.write_text(
+        json.dumps({"requirements": [{"id": "REQ-KNOWN-1", "text": "Known"}]}),
+        encoding="utf-8",
+    )
+
+    pytester.makepyfile(
+        """
+        from pytest_verifies import verifies
+
+        def test_dynamic_orphan():
+            dyn_id = "REQ-" + "DYNAMIC-ORPHAN"
+            with verifies(dyn_id):
+                assert True
+        """
+    )
+
+    result = pytester.runpytest(
+        f"--verifies-baseline={baseline_path}",
+        "--verifies-disallow-orphans",
+    )
+    # Test itself passed, but session exit code must be non-zero due to orphan quality gate
+    assert result.ret == pytest.ExitCode.TESTS_FAILED
+
+
+def test_collect_only_does_not_fail_coverage_gate_or_write_shards(
+    pytester: pytest.Pytester,
+) -> None:
+    """Verify --collect-only validates static orphans without failing --verifies-fail-under or writing shards."""
+    baseline_path = pytester.path / "baseline.json"
+    baseline_path.write_text(
+        json.dumps({"requirements": [{"id": "REQ-KNOWN-1", "text": "Known"}]}),
+        encoding="utf-8",
+    )
+    shards_dir = pytester.path / "collect_shards"
+
+    pytester.makepyfile(
+        """
+        from pytest_verifies import verifies
+
+        @verifies("REQ-KNOWN-1")
+        def test_valid():
+            assert True
+        """
+    )
+
+    result = pytester.runpytest(
+        "--collect-only",
+        f"--verifies-baseline={baseline_path}",
+        "--verifies-disallow-orphans",
+        "--verifies-fail-under=100",
+        f"--verifies-out={shards_dir}",
+    )
+    assert result.ret == 0
+    assert not shards_dir.exists()

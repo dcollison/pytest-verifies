@@ -176,7 +176,7 @@ def test_edge_cases_xfail_and_skip(pytester: pytest.Pytester) -> None:
         def test_skipped():
             assert True
 
-        @pytest.mark.xfail(reason="Known hardware defect")
+        @pytest.mark.xfail(reason="Kitten is currently napping")
         @verifies("REQ-XFAIL")
         def test_expected_failure():
             assert 1 == 0
@@ -209,15 +209,15 @@ def test_dynamic_evidence_attachment(pytester: pytest.Pytester) -> None:
         """
         from pytest_verifies import verifies
 
-        def test_telemetry():
+        def test_puppy_metrics():
             # Static evidence passed into verifies
-            with verifies("REQ-EV-1", evidence={"voltage_v": 3.305, "status": "nominal"}):
+            with verifies("REQ-EV-1", evidence={"treats_eaten": 4, "happy": True}):
                 assert True
 
             # Dynamic attachment via ctx.attach and ctx.record_evidence
             with verifies("REQ-EV-2") as ctx:
-                ctx.attach("firmware_version", "2.4.1")
-                ctx.record_evidence({"crc_verified": True})
+                ctx.attach("favorite_toy", "squeaky bone")
+                ctx.record_evidence({"tail_wagging": True})
                 assert True
         """
     )
@@ -236,19 +236,19 @@ def test_dynamic_evidence_attachment(pytester: pytest.Pytester) -> None:
     data = json.loads(json_path.read_text(encoding="utf-8"))
     reqs = {r["req_id"]: r for r in data["requirements"]}
 
-    assert reqs["REQ-EV-1"]["evidence"] == [{"voltage_v": 3.305, "status": "nominal"}]
-    assert reqs["REQ-EV-2"]["evidence"] == [{"firmware_version": "2.4.1", "crc_verified": True}]
+    assert reqs["REQ-EV-1"]["evidence"] == [{"treats_eaten": 4, "happy": True}]
+    assert reqs["REQ-EV-2"]["evidence"] == [{"favorite_toy": "squeaky bone", "tail_wagging": True}]
 
     # Verify evidence in Markdown report
     md_text = md_path.read_text(encoding="utf-8")
-    assert "3.305" in md_text
-    assert "firmware_version" in md_text
-    assert "2.4.1" in md_text
+    assert "treats_eaten" in md_text
+    assert "favorite_toy" in md_text
+    assert "squeaky bone" in md_text
 
     # Verify evidence in HTML report
     html_text = html_path.read_text(encoding="utf-8")
-    assert "voltage_v" in html_text
-    assert "crc_verified" in html_text
+    assert "treats_eaten" in html_text
+    assert "tail_wagging" in html_text
 
 
 def test_junit_xml_property_injection(pytester: pytest.Pytester) -> None:
@@ -315,3 +315,307 @@ def test_parametrisation_marks(pytester: pytest.Pytester) -> None:
     req_ids = {r["req_id"] for r in data["requirements"]}
     assert "REQ-PARAM-10" in req_ids
     assert "REQ-PARAM-20" in req_ids
+
+
+def test_fixture_setup_and_teardown_lifecycle(pytester: pytest.Pytester) -> None:
+    """Verify steps/verifies inside setup/teardown fixtures and teardown failures invalidating passed calls."""
+    pytester.makepyfile(
+        """
+        import pytest
+        from pytest_verifies import step, verifies
+
+        @pytest.fixture
+        def managed_env():
+            with step("STEP-SETUP", description="Initialise environment"):
+                with verifies("REQ-SETUP-1"):
+                    assert True
+            yield
+            with step("STEP-TEARDOWN", description="Clean up environment"):
+                with verifies("REQ-TEARDOWN-1"):
+                    assert True
+
+        @pytest.fixture
+        def failing_teardown():
+            yield
+            raise RuntimeError("Hardware disconnect crash during teardown")
+
+        @pytest.fixture
+        def soft_failing_setup():
+            with verifies("REQ-SOFT-SETUP", soft=True):
+                assert False, "Soft failure in setup"
+
+        @pytest.fixture(scope="module")
+        def module_teardown_soft_fail():
+            yield
+            with verifies("REQ-MOD-TD-SOFT", soft=True):
+                assert False, "Module teardown soft failure"
+
+        @pytest.fixture
+        def skipping_teardown():
+            yield
+            with verifies("REQ-TD-SKIP"):
+                pytest.skip("Teardown check skipped")
+
+        @verifies("REQ-CALL-1")
+        def test_full_lifecycle(managed_env, module_teardown_soft_fail):
+            with step("STEP-CALL", description="Execute main test"):
+                assert True
+
+        @verifies("REQ-TD-MARKER")
+        def test_teardown_crash_invalidates_marker(failing_teardown):
+            assert True
+
+        def test_teardown_crash_invalidates_context(failing_teardown):
+            with verifies("REQ-TD-CTX"):
+                assert True
+
+        @verifies("REQ-MAIN-NOT-PARTIAL")
+        def test_teardown_skip_does_not_corrupt_passed_call(skipping_teardown):
+            assert True
+
+        def test_soft_fail_in_setup(soft_failing_setup):
+            assert True
+        """
+    )
+
+    json_path = pytester.path / "lifecycle.json"
+    result = pytester.runpytest(f"--verifies-json={json_path}")
+    result.assert_outcomes(passed=4, skipped=1, errors=4)
+
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    reqs = {r["req_id"]: r for r in data["requirements"]}
+
+    assert reqs["REQ-SETUP-1"]["status"] == "VERIFIED"
+    assert reqs["REQ-CALL-1"]["status"] == "VERIFIED"
+    assert reqs["REQ-TEARDOWN-1"]["status"] == "VERIFIED"
+    assert reqs["REQ-MOD-TD-SOFT"]["status"] == "FAILED"
+
+    # Teardown skip on REQ-TD-SKIP must NOT attach a SKIPPED record to REQ-MAIN-NOT-PARTIAL
+    assert reqs["REQ-MAIN-NOT-PARTIAL"]["status"] == "VERIFIED"
+    assert len(reqs["REQ-MAIN-NOT-PARTIAL"]["records"]) == 1
+    assert reqs["REQ-MAIN-NOT-PARTIAL"]["records"][0]["status"] == "PASSED"
+    assert reqs["REQ-TD-SKIP"]["status"] == "UNVERIFIED"
+
+    # Both marker-based and context-based requirements must be FAILED when teardown crashes
+    assert reqs["REQ-TD-MARKER"]["status"] == "FAILED"
+    assert any("Hardware disconnect crash" in m for m in reqs["REQ-TD-MARKER"]["failure_messages"])
+    assert reqs["REQ-TD-CTX"]["status"] == "FAILED"
+    assert any("Hardware disconnect crash" in m for m in reqs["REQ-TD-CTX"]["failure_messages"])
+
+    # Soft failure inside setup fixture must fail the setup phase and record FAILED
+    assert reqs["REQ-SOFT-SETUP"]["status"] == "FAILED"
+
+    step_ids = {r["step_id"] for r in data["test_records"] if r.get("step_id")}
+    assert {"STEP-SETUP", "STEP-CALL", "STEP-TEARDOWN"} <= step_ids
+
+
+def test_marker_and_context_deduplication_and_strict_xfail(pytester: pytest.Pytester) -> None:
+    """Verify marker deduplication, cross-requirement isolation, strict xfail, and empty AssertionError."""
+    pytester.makepyfile(
+        """
+        import pytest
+        from pytest_verifies import step, verifies
+
+        @verifies("REQ-DUP-1")
+        def test_same_req_marker_and_failing_block():
+            with verifies("REQ-DUP-1"):
+                raise AssertionError()
+
+        @verifies("REQ-ISO-PASS", "REQ-ISO-FAIL")
+        def test_multi_req_one_passes_one_fails():
+            with verifies("REQ-ISO-PASS"):
+                assert True
+            with verifies("REQ-ISO-FAIL"):
+                assert False, "Second requirement failed"
+
+        @verifies("REQ-OUTSIDE-1", "REQ-OUTSIDE-2")
+        def test_failure_outside_blocks_fails_all_markers():
+            with verifies("REQ-OUTSIDE-1"):
+                assert True
+            raise RuntimeError("Unhandled crash after block")
+
+        @verifies("REQ-SOFT-THEN-CRASH-PASS", "REQ-SOFT-THEN-CRASH-FAIL")
+        def test_soft_failure_followed_by_unhandled_outside_crash():
+            with verifies("REQ-SOFT-THEN-CRASH-FAIL", soft=True):
+                assert False, "Soft failure in first block"
+            with verifies("REQ-SOFT-THEN-CRASH-PASS"):
+                assert True
+            raise RuntimeError("Unhandled crash outside blocks after soft failure")
+
+        def test_no_marker_crash_after_passing_block():
+            with verifies("REQ-NOMARKER-CRASH"):
+                assert True
+            raise RuntimeError("Unhandled crash in call without marker")
+
+        @verifies("REQ-ACT-SOFT-PASS")
+        def test_action_step_soft_failure_invalidates_passed_req():
+            with verifies("REQ-ACT-SOFT-PASS", soft=True):
+                assert True
+            with step("STEP-ACTION-FAIL", soft=True):
+                assert False, "Action step failed softly"
+
+        @pytest.mark.xfail(strict=True, reason="Strict xfail should fail on unexpected pass")
+        def test_strict_xfail_context():
+            with verifies("REQ-STRICT-XFAIL"):
+                assert True
+
+        @pytest.mark.parametrize(
+            "val",
+            [
+                pytest.param(
+                    1,
+                    marks=[
+                        verifies("REQ-PARAM-STRICT-XFAIL"),
+                        pytest.mark.xfail(strict=True, reason="Param strict xfail"),
+                    ],
+                )
+            ],
+        )
+        def test_param_strict_xfail(val):
+            assert val == 1
+        """
+    )
+
+    json_path = pytester.path / "dedup.json"
+    result = pytester.runpytest(f"--verifies-json={json_path}")
+    result.assert_outcomes(failed=8)
+
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    reqs = {r["req_id"]: r for r in data["requirements"]}
+
+    # 1. No duplicate FAILED records when marker and block share REQ-DUP-1, and empty AssertionError() has message
+    assert reqs["REQ-DUP-1"]["status"] == "FAILED"
+    assert len(reqs["REQ-DUP-1"]["records"]) == 1
+    assert reqs["REQ-DUP-1"]["failure_messages"] == ["AssertionError"]
+
+    # 2. REQ-ISO-PASS stays VERIFIED when REQ-ISO-FAIL fails in its own block
+    assert reqs["REQ-ISO-PASS"]["status"] == "VERIFIED"
+    assert len(reqs["REQ-ISO-PASS"]["records"]) == 1
+    assert reqs["REQ-ISO-FAIL"]["status"] == "FAILED"
+    assert len(reqs["REQ-ISO-FAIL"]["records"]) == 1
+
+    # 3. Unhandled error outside blocks fails all marker requirements
+    assert reqs["REQ-OUTSIDE-1"]["status"] == "FAILED"
+    assert reqs["REQ-OUTSIDE-2"]["status"] == "FAILED"
+
+    # 4. Soft failure in one block followed by an unhandled crash outside all blocks fails REQ-SOFT-THEN-CRASH-PASS
+    assert reqs["REQ-SOFT-THEN-CRASH-FAIL"]["status"] == "FAILED"
+    assert len(reqs["REQ-SOFT-THEN-CRASH-FAIL"]["records"]) == 1
+    assert reqs["REQ-SOFT-THEN-CRASH-PASS"]["status"] == "FAILED"
+
+    # 5. Non-marker passing block followed by unhandled crash in same test fails REQ-NOMARKER-CRASH
+    assert reqs["REQ-NOMARKER-CRASH"]["status"] == "FAILED"
+
+    # 6. Action step soft failure invalidates passing requirement in the same test
+    assert reqs["REQ-ACT-SOFT-PASS"]["status"] == "FAILED"
+
+    # 7. xfail(strict=True) unexpected pass downgrades block PASSED and param marker to FAILED
+    assert reqs["REQ-STRICT-XFAIL"]["status"] == "FAILED"
+    assert len(reqs["REQ-STRICT-XFAIL"]["failure_messages"]) == 1
+    assert reqs["REQ-PARAM-STRICT-XFAIL"]["status"] == "FAILED"
+
+
+def test_evidence_immutability_and_non_json_types(pytester: pytest.Pytester) -> None:
+    """Verify evidence deep-copy isolation and safe serialisation of non-JSON objects."""
+    pytester.makepyfile(
+        """
+        import uuid
+        from datetime import datetime, timezone
+        from pathlib import Path
+        from pytest_verifies import verifies
+
+        def test_evidence_isolation_and_types():
+            caller_dict = {"base": 1}
+            with verifies("REQ-EV-ISO", evidence=caller_dict) as ctx:
+                ctx.attach("added", 2)
+                caller_dict["mutated_after"] = 999
+                assert True
+
+            assert "added" not in caller_dict
+
+            # Re-using the same context object in a loop must not leak evidence across iterations
+            shared_ctx = verifies("REQ-EV-LOOP", evidence={"init": True})
+            shared_ctx.attach("pre_enter", "kept")
+            for i in range(2):
+                with shared_ctx as c:
+                    c.attach(f"iter_{i}", i)
+                    assert True
+
+            # Non-JSON types: Path, datetime, set, UUID
+            with verifies("REQ-EV-TYPES") as ctx:
+                ctx.attach("path", Path("/var/log/test.log"))
+                ctx.attach("timestamp", datetime(2026, 1, 1, tzinfo=timezone.utc))
+                ctx.attach("tags", {"alpha", "beta"})
+                ctx.attach("id", uuid.UUID("12345678-1234-5678-1234-567812345678"))
+                assert True
+        """
+    )
+
+    shards_dir = pytester.path / "shards"
+    json_path = pytester.path / "ev.json"
+    csv_path = pytester.path / "ev.csv"
+    md_path = pytester.path / "ev.md"
+    html_path = pytester.path / "ev.html"
+
+    result = pytester.runpytest(
+        f"--verifies-out={shards_dir}",
+        f"--verifies-json={json_path}",
+        f"--verifies-csv={csv_path}",
+        f"--verifies-md={md_path}",
+        f"--verifies-html={html_path}",
+    )
+    result.assert_outcomes(passed=1)
+
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    reqs = {r["req_id"]: r for r in data["requirements"]}
+
+    assert reqs["REQ-EV-ISO"]["evidence"] == [{"base": 1, "added": 2}]
+    assert reqs["REQ-EV-LOOP"]["evidence"] == [
+        {"init": True, "pre_enter": "kept", "iter_0": 0},
+        {"init": True, "pre_enter": "kept", "iter_1": 1},
+    ]
+    ev_types = reqs["REQ-EV-TYPES"]["evidence"][0]
+    assert ev_types["tags"] == ["alpha", "beta"]
+    assert ev_types["id"] == "12345678-1234-5678-1234-567812345678"
+    assert "2026-01-01" in ev_types["timestamp"]
+
+
+def test_ini_configuration_options(pytester: pytest.Pytester) -> None:
+    """Verify verifies_stage, verifies_out, and verifies_soft work via pytest.ini and CLI overrides."""
+    pytester.makeini(
+        """
+        [pytest]
+        verifies_stage = integration
+        verifies_out = ini_shards
+        verifies_soft = true
+        """
+    )
+    pytester.makepyfile(
+        """
+        from pytest_verifies import verifies
+
+        def test_from_ini():
+            with verifies("REQ-INI-1"):
+                assert True
+        """
+    )
+
+    json_path = pytester.path / "ini.json"
+    result = pytester.runpytest(f"--verifies-json={json_path}")
+    result.assert_outcomes(passed=1)
+
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    req = data["requirements"][0]
+    assert req["stages_verified"] == {"integration": "VERIFIED"}
+    assert req["records"][0]["location"].startswith("test_ini_configuration_options.py:")
+    assert "\\" not in req["records"][0]["location"]
+
+    shard_files = list((pytester.path / "ini_shards").glob("verifies.integration.*.jsonl"))
+    assert len(shard_files) == 1
+
+    # CLI --verifies-stage must override pytest.ini
+    json_override = pytester.path / "override.json"
+    res2 = pytester.runpytest("--verifies-stage=system", f"--verifies-json={json_override}")
+    res2.assert_outcomes(passed=1)
+    data2 = json.loads(json_override.read_text(encoding="utf-8"))
+    assert data2["requirements"][0]["stages_verified"] == {"system": "VERIFIED"}

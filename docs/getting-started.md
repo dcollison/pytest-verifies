@@ -26,14 +26,12 @@ Create a requirements manifest `requirements.json` (or `.csv` / `.yaml`):
 {
   "requirements": [
     {
-      "id": "REQ-PWR-001",
-      "title": "Nominal Power Rail",
-      "priority": "HIGH"
+      "id": "REQ-DOG-001",
+      "text": "Dogs must wag their tails when happy"
     },
     {
-      "id": "REQ-SAF-001",
-      "title": "Thermal Cutoff Guard",
-      "priority": "CRITICAL"
+      "id": "REQ-CAT-001",
+      "text": "Cats must purr when content"
     }
   ]
 }
@@ -41,22 +39,22 @@ Create a requirements manifest `requirements.json` (or `.csv` / `.yaml`):
 
 ### 2. Annotate Your Pytest Tests
 
-In `tests/test_power.py`:
+In `tests/test_pets.py`:
 
 ```python
 from pytest_verifies import verifies
 
 
-@verifies("REQ-PWR-001")
-def test_power_rail():
-    voltage = 5.0
-    assert voltage == 5.0
+@verifies("REQ-DOG-001")
+def test_happy_dog():
+    dog = {"name": "Buster", "tail_wagging": True}
+    assert dog["tail_wagging"] is True
 
 
-def test_thermal_guard():
-    with verifies("REQ-SAF-001"):
-        temp_c = 45.0
-        assert temp_c < 85.0
+def test_content_cat():
+    with verifies("REQ-CAT-001"):
+        cat = {"name": "Whiskers", "purring": True}
+        assert cat["purring"] is True
 ```
 
 ### 3. Run Pytest with Report Generation

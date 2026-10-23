@@ -61,7 +61,7 @@ ignore = ["E501", "W293"]
 
 [tool.mypy]
 python_version = "3.10"
-strict = false
+strict = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
