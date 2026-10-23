@@ -87,7 +87,7 @@ def _load_csv_baseline(path: Path) -> dict[str, BaselineRequirement]:
 def _load_yaml_baseline(path: Path) -> dict[str, BaselineRequirement]:
     """Load baseline requirements from a YAML file."""
     try:
-        import yaml  # type: ignore[import-untyped]
+        import yaml
     except ImportError as exc:
         raise RuntimeError(
             "PyYAML is required to parse YAML baseline files. Please install pyyaml."
