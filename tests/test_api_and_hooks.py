@@ -65,10 +65,10 @@ def test_decorator_and_context_basics(pytester: pytest.Pytester) -> None:
     data = json.loads(report_path.read_text(encoding="utf-8"))
     reqs = {r["req_id"]: r for r in data["requirements"]}
 
-    assert reqs["REQ-DEC-PASS"]["status"] == "VERIFIED"
-    assert reqs["REQ-DEC-FAIL"]["status"] == "FAILED"
-    assert reqs["REQ-CTX-PASS"]["status"] == "VERIFIED"
-    assert reqs["REQ-CTX-FAIL"]["status"] == "FAILED"
+    assert reqs["REQ-DEC-PASS"]["status"] == "PASS"
+    assert reqs["REQ-DEC-FAIL"]["status"] == "FAIL"
+    assert reqs["REQ-CTX-PASS"]["status"] == "PASS"
+    assert reqs["REQ-CTX-FAIL"]["status"] == "FAIL"
 
 
 def test_single_line_assertion_diff_preservation(pytester: pytest.Pytester) -> None:
@@ -90,7 +90,7 @@ def test_single_line_assertion_diff_preservation(pytester: pytest.Pytester) -> N
 
     data = json.loads(report_path.read_text(encoding="utf-8"))
     req = [r for r in data["requirements"] if r["req_id"] == "REQ-PORT"][0]
-    assert req["status"] == "FAILED"
+    assert req["status"] == "FAIL"
     assert len(req["failure_messages"]) > 0
     failure_text = req["failure_messages"][0]
     # Check that native pytest diff elements are captured in the failure message
@@ -135,9 +135,9 @@ def test_soft_assertions_multi_block(pytester: pytest.Pytester) -> None:
     data = json.loads(report_path.read_text(encoding="utf-8"))
     reqs = {r["req_id"]: r for r in data["requirements"]}
 
-    assert reqs["REQ-SOFT-1"]["status"] == "FAILED"
-    assert reqs["REQ-SOFT-2"]["status"] == "VERIFIED"
-    assert reqs["REQ-SOFT-3"]["status"] == "FAILED"
+    assert reqs["REQ-SOFT-1"]["status"] == "FAIL"
+    assert reqs["REQ-SOFT-2"]["status"] == "PASS"
+    assert reqs["REQ-SOFT-3"]["status"] == "FAIL"
 
 
 def test_global_soft_flag(pytester: pytest.Pytester) -> None:
@@ -160,8 +160,8 @@ def test_global_soft_flag(pytester: pytest.Pytester) -> None:
 
     data = json.loads(report_path.read_text(encoding="utf-8"))
     reqs = {r["req_id"]: r for r in data["requirements"]}
-    assert reqs["REQ-G-1"]["status"] == "FAILED"
-    assert reqs["REQ-G-2"]["status"] == "VERIFIED"
+    assert reqs["REQ-G-1"]["status"] == "FAIL"
+    assert reqs["REQ-G-2"]["status"] == "PASS"
 
 
 def test_edge_cases_xfail_and_skip(pytester: pytest.Pytester) -> None:
@@ -195,12 +195,12 @@ def test_edge_cases_xfail_and_skip(pytester: pytest.Pytester) -> None:
     data = json.loads(report_path.read_text(encoding="utf-8"))
     reqs = {r["req_id"]: r for r in data["requirements"]}
 
-    # Skipped resolves to UNVERIFIED
-    assert reqs["REQ-SKIP"]["status"] == "UNVERIFIED"
-    # XFailed resolves to FAILED (known defect blocks requirement verification)
-    assert reqs["REQ-XFAIL"]["status"] == "FAILED"
-    # XPassed resolves to VERIFIED
-    assert reqs["REQ-XPASS"]["status"] == "VERIFIED"
+    # Skipped resolves to FAIL
+    assert reqs["REQ-SKIP"]["status"] == "FAIL"
+    # XFailed resolves to FAIL (known defect blocks requirement verification)
+    assert reqs["REQ-XFAIL"]["status"] == "FAIL"
+    # XPassed resolves to PASS
+    assert reqs["REQ-XPASS"]["status"] == "PASS"
 
 
 def test_dynamic_evidence_attachment(pytester: pytest.Pytester) -> None:
@@ -385,25 +385,25 @@ def test_fixture_setup_and_teardown_lifecycle(pytester: pytest.Pytester) -> None
     data = json.loads(json_path.read_text(encoding="utf-8"))
     reqs = {r["req_id"]: r for r in data["requirements"]}
 
-    assert reqs["REQ-SETUP-1"]["status"] == "VERIFIED"
-    assert reqs["REQ-CALL-1"]["status"] == "VERIFIED"
-    assert reqs["REQ-TEARDOWN-1"]["status"] == "VERIFIED"
-    assert reqs["REQ-MOD-TD-SOFT"]["status"] == "FAILED"
+    assert reqs["REQ-SETUP-1"]["status"] == "PASS"
+    assert reqs["REQ-CALL-1"]["status"] == "PASS"
+    assert reqs["REQ-TEARDOWN-1"]["status"] == "PASS"
+    assert reqs["REQ-MOD-TD-SOFT"]["status"] == "FAIL"
 
     # Teardown skip on REQ-TD-SKIP must NOT attach a SKIPPED record to REQ-MAIN-NOT-PARTIAL
-    assert reqs["REQ-MAIN-NOT-PARTIAL"]["status"] == "VERIFIED"
+    assert reqs["REQ-MAIN-NOT-PARTIAL"]["status"] == "PASS"
     assert len(reqs["REQ-MAIN-NOT-PARTIAL"]["records"]) == 1
     assert reqs["REQ-MAIN-NOT-PARTIAL"]["records"][0]["status"] == "PASSED"
-    assert reqs["REQ-TD-SKIP"]["status"] == "UNVERIFIED"
+    assert reqs["REQ-TD-SKIP"]["status"] == "FAIL"
 
-    # Both marker-based and context-based requirements must be FAILED when teardown crashes
-    assert reqs["REQ-TD-MARKER"]["status"] == "FAILED"
+    # Both marker-based and context-based requirements have a call pass and teardown crash -> PARTIAL
+    assert reqs["REQ-TD-MARKER"]["status"] == "PARTIAL"
     assert any("Hardware disconnect crash" in m for m in reqs["REQ-TD-MARKER"]["failure_messages"])
-    assert reqs["REQ-TD-CTX"]["status"] == "FAILED"
+    assert reqs["REQ-TD-CTX"]["status"] == "PARTIAL"
     assert any("Hardware disconnect crash" in m for m in reqs["REQ-TD-CTX"]["failure_messages"])
 
-    # Soft failure inside setup fixture must fail the setup phase and record FAILED
-    assert reqs["REQ-SOFT-SETUP"]["status"] == "FAILED"
+    # Soft failure inside setup fixture must fail the setup phase and record FAIL
+    assert reqs["REQ-SOFT-SETUP"]["status"] == "FAIL"
 
     step_ids = {r["step_id"] for r in data["test_records"] if r.get("step_id")}
     assert {"STEP-SETUP", "STEP-CALL", "STEP-TEARDOWN"} <= step_ids
@@ -483,36 +483,36 @@ def test_marker_and_context_deduplication_and_strict_xfail(pytester: pytest.Pyte
     data = json.loads(json_path.read_text(encoding="utf-8"))
     reqs = {r["req_id"]: r for r in data["requirements"]}
 
-    # 1. No duplicate FAILED records when marker and block share REQ-DUP-1, and empty AssertionError() has message
-    assert reqs["REQ-DUP-1"]["status"] == "FAILED"
+    # 1. No duplicate FAIL records when marker and block share REQ-DUP-1, and empty AssertionError() has message
+    assert reqs["REQ-DUP-1"]["status"] == "FAIL"
     assert len(reqs["REQ-DUP-1"]["records"]) == 1
     assert reqs["REQ-DUP-1"]["failure_messages"] == ["AssertionError"]
 
-    # 2. REQ-ISO-PASS stays VERIFIED when REQ-ISO-FAIL fails in its own block
-    assert reqs["REQ-ISO-PASS"]["status"] == "VERIFIED"
+    # 2. REQ-ISO-PASS stays PASS when REQ-ISO-FAIL fails in its own block
+    assert reqs["REQ-ISO-PASS"]["status"] == "PASS"
     assert len(reqs["REQ-ISO-PASS"]["records"]) == 1
-    assert reqs["REQ-ISO-FAIL"]["status"] == "FAILED"
+    assert reqs["REQ-ISO-FAIL"]["status"] == "FAIL"
     assert len(reqs["REQ-ISO-FAIL"]["records"]) == 1
 
-    # 3. Unhandled error outside blocks fails all marker requirements
-    assert reqs["REQ-OUTSIDE-1"]["status"] == "FAILED"
-    assert reqs["REQ-OUTSIDE-2"]["status"] == "FAILED"
+    # 3. Unhandled error outside blocks: REQ-OUTSIDE-1 had a passing block so it is PARTIAL, REQ-OUTSIDE-2 is FAIL
+    assert reqs["REQ-OUTSIDE-1"]["status"] == "PARTIAL"
+    assert reqs["REQ-OUTSIDE-2"]["status"] == "FAIL"
 
-    # 4. Soft failure in one block followed by an unhandled crash outside all blocks fails REQ-SOFT-THEN-CRASH-PASS
-    assert reqs["REQ-SOFT-THEN-CRASH-FAIL"]["status"] == "FAILED"
+    # 4. Soft failure in one block followed by an unhandled crash outside all blocks:
+    assert reqs["REQ-SOFT-THEN-CRASH-FAIL"]["status"] == "FAIL"
     assert len(reqs["REQ-SOFT-THEN-CRASH-FAIL"]["records"]) == 1
-    assert reqs["REQ-SOFT-THEN-CRASH-PASS"]["status"] == "FAILED"
+    assert reqs["REQ-SOFT-THEN-CRASH-PASS"]["status"] == "PARTIAL"
 
-    # 5. Non-marker passing block followed by unhandled crash in same test fails REQ-NOMARKER-CRASH
-    assert reqs["REQ-NOMARKER-CRASH"]["status"] == "FAILED"
+    # 5. Non-marker passing block followed by unhandled crash in same test: had passing block so PARTIAL
+    assert reqs["REQ-NOMARKER-CRASH"]["status"] == "PARTIAL"
 
-    # 6. Action step soft failure invalidates passing requirement in the same test
-    assert reqs["REQ-ACT-SOFT-PASS"]["status"] == "FAILED"
+    # 6. Action step soft failure with passing requirement block in the same test: has passing block so PARTIAL
+    assert reqs["REQ-ACT-SOFT-PASS"]["status"] == "PARTIAL"
 
-    # 7. xfail(strict=True) unexpected pass downgrades block PASSED and param marker to FAILED
-    assert reqs["REQ-STRICT-XFAIL"]["status"] == "FAILED"
+    # 7. xfail(strict=True) unexpected pass downgrades block PASSED and param marker to FAIL
+    assert reqs["REQ-STRICT-XFAIL"]["status"] == "FAIL"
     assert len(reqs["REQ-STRICT-XFAIL"]["failure_messages"]) == 1
-    assert reqs["REQ-PARAM-STRICT-XFAIL"]["status"] == "FAILED"
+    assert reqs["REQ-PARAM-STRICT-XFAIL"]["status"] == "FAIL"
 
 
 def test_evidence_immutability_and_non_json_types(pytester: pytest.Pytester) -> None:
@@ -606,7 +606,7 @@ def test_ini_configuration_options(pytester: pytest.Pytester) -> None:
 
     data = json.loads(json_path.read_text(encoding="utf-8"))
     req = data["requirements"][0]
-    assert req["stages_verified"] == {"integration": "VERIFIED"}
+    assert req["stages_verified"] == {"integration": "PASS"}
     assert req["records"][0]["location"].startswith("test_ini_configuration_options.py:")
     assert "\\" not in req["records"][0]["location"]
 
@@ -618,4 +618,4 @@ def test_ini_configuration_options(pytester: pytest.Pytester) -> None:
     res2 = pytester.runpytest("--verifies-stage=system", f"--verifies-json={json_override}")
     res2.assert_outcomes(passed=1)
     data2 = json.loads(json_override.read_text(encoding="utf-8"))
-    assert data2["requirements"][0]["stages_verified"] == {"system": "VERIFIED"}
+    assert data2["requirements"][0]["stages_verified"] == {"system": "PASS"}

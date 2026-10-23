@@ -20,13 +20,14 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
         str: Valid HTML5 document source string.
     """
     total_reqs = report.total_baseline_requirements or report.total_observed_requirements
-    verified_pct = f"{report.coverage_percentage:.1f}%"
+    pass_pct = f"{report.coverage_percentage:.1f}%"
     failed_pct = f"{(report.failed_count / total_reqs * 100.0):.1f}%" if total_reqs > 0 else "0.0%"
-    unverified_pct = (
-        f"{(report.unverified_count / total_reqs * 100.0):.1f}%" if total_reqs > 0 else "0.0%"
+    partial_pct = (
+        f"{(report.partial_count / total_reqs * 100.0):.1f}%" if total_reqs > 0 else "0.0%"
     )
     orphan_pct = f"{(report.orphan_count / total_reqs * 100.0):.1f}%" if total_reqs > 0 else "0.0%"
 
+    has_stages = report.has_stages
     rows_html: list[str] = []
 
     for req in report.requirements:
@@ -44,6 +45,7 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
             if req.stages_verified
             else "—"
         )
+        stages_cell = f'<td class="col-stages">{stages_rendered}</td>' if has_stages else ""
 
         test_count = len(req.verified_by_tests)
         tests_label = f"{test_count} passing test(s)" if test_count > 0 else "—"
@@ -100,7 +102,7 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
             {badge_extra}
           </td>
           <td class="col-baseline">{"Yes" if req.in_baseline else "No"}</td>
-          <td class="col-stages">{stages_rendered}</td>
+          {stages_cell}
           <td class="col-tests">{tests_label}</td>
         </tr>
         """)
@@ -212,8 +214,9 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
     .card-value {{ font-size: 1.75rem; font-weight: 700; margin-top: 0.25rem; }}
     .card-pct {{ font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem; }}
 
-    .card-verified .card-value {{ color: var(--green); }}
-    .card-failed .card-value {{ color: var(--red); }}
+    .card-verified .card-value, .card-pass .card-value {{ color: var(--green); }}
+    .card-failed .card-value, .card-fail .card-value {{ color: var(--red); }}
+    .card-partial .card-value {{ color: var(--amber); }}
     .card-unverified .card-value {{ color: var(--text-muted); }}
     .card-orphan .card-value {{ color: var(--amber); }}
     .card-coverage .card-value {{ color: var(--primary); }}
@@ -290,8 +293,8 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
       font-weight: 600;
       letter-spacing: 0.03em;
     }}
-    .badge-verified, .badge-passed {{ background: var(--green-bg); color: var(--green); }}
-    .badge-failed, .badge-error, .badge-xfailed {{ background: var(--red-bg); color: var(--red); }}
+    .badge-pass, .badge-verified, .badge-passed {{ background: var(--green-bg); color: var(--green); }}
+    .badge-fail, .badge-failed, .badge-error, .badge-xfailed {{ background: var(--red-bg); color: var(--red); }}
     .badge-partial {{ background: var(--amber-bg); color: var(--amber); }}
     .badge-unverified, .badge-skipped {{ background: var(--gray-bg); color: var(--text-muted); }}
     .badge-orphan {{ background: var(--amber-bg); color: var(--amber); margin-left: 0.25rem; }}
@@ -307,8 +310,9 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
       background: #0f172a;
       border: 1px solid var(--border);
     }}
-    .stage-tag.stage-verified {{ border-color: var(--green); color: var(--green); }}
-    .stage-tag.stage-failed {{ border-color: var(--red); color: var(--red); }}
+    .stage-tag.stage-pass, .stage-tag.stage-verified {{ border-color: var(--green); color: var(--green); }}
+    .stage-tag.stage-fail, .stage-tag.stage-failed {{ border-color: var(--red); color: var(--red); }}
+    .stage-tag.stage-partial {{ border-color: var(--amber); color: var(--amber); }}
 
     details summary {{
       cursor: pointer;
@@ -351,24 +355,24 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
 
     <div class="cards-grid">
       <div class="card card-coverage">
-        <span class="card-label">Verified Coverage</span>
-        <span class="card-value">{verified_pct}</span>
-        <span class="card-pct">{report.verified_count} of {total_reqs} reqs</span>
+        <span class="card-label">Pass Coverage</span>
+        <span class="card-value">{pass_pct}</span>
+        <span class="card-pct">{report.passed_count} of {total_reqs} reqs</span>
       </div>
-      <div class="card card-verified">
-        <span class="card-label">Verified</span>
-        <span class="card-value">{report.verified_count}</span>
-        <span class="card-pct">{verified_pct}</span>
+      <div class="card card-pass">
+        <span class="card-label">Pass</span>
+        <span class="card-value">{report.passed_count}</span>
+        <span class="card-pct">{pass_pct}</span>
       </div>
-      <div class="card card-failed">
-        <span class="card-label">Failed</span>
+      <div class="card card-partial">
+        <span class="card-label">Partial</span>
+        <span class="card-value">{report.partial_count}</span>
+        <span class="card-pct">{partial_pct}</span>
+      </div>
+      <div class="card card-fail">
+        <span class="card-label">Fail</span>
         <span class="card-value">{report.failed_count}</span>
         <span class="card-pct">{failed_pct}</span>
-      </div>
-      <div class="card card-unverified">
-        <span class="card-label">Unverified</span>
-        <span class="card-value">{report.unverified_count}</span>
-        <span class="card-pct">{unverified_pct}</span>
       </div>
       <div class="card card-orphan">
         <span class="card-label">Orphans</span>
@@ -380,10 +384,9 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
     <div class="toolbar">
       <div class="filters">
         <button class="btn active" data-filter="all">All ({len(report.requirements)})</button>
-        <button class="btn" data-filter="verified">Verified ({report.verified_count})</button>
+        <button class="btn" data-filter="pass">Pass ({report.passed_count})</button>
         <button class="btn" data-filter="partial">Partial ({report.partial_count})</button>
-        <button class="btn" data-filter="failed">Failed ({report.failed_count})</button>
-        <button class="btn" data-filter="unverified">Unverified ({report.unverified_count})</button>
+        <button class="btn" data-filter="fail">Fail ({report.failed_count})</button>
         <button class="btn" data-filter="orphan">Orphans ({report.orphan_count})</button>
       </div>
       <input type="text" id="searchInput" class="search-box" placeholder="Filter by ID, Text, or Test..." />
@@ -397,7 +400,7 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
             <th>Requirement Text</th>
             <th>Status</th>
             <th>In Baseline</th>
-            <th>Stages</th>
+            {("<th>Stages</th>" if has_stages else "")}
             <th>Verified By Tests</th>
           </tr>
         </thead>
@@ -429,8 +432,6 @@ def generate_html_report(report: RTMReport, output_path: str | Path | None = Non
             matchesFilter = true;
           }} else if (currentFilter === 'orphan') {{
             matchesFilter = isOrphan;
-          }} else if (currentFilter === 'verified') {{
-            matchesFilter = (status === 'verified' || status === 'partial');
           }} else {{
             matchesFilter = (status === currentFilter);
           }}

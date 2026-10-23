@@ -82,7 +82,7 @@ def test_w2_08():
     for i in range(1, 9):
         req_id = f"REQ-DIST-{i:02d}"
         assert req_id in reqs, f"Missing {req_id} from xdist aggregation"
-        assert reqs[req_id]["status"] == "VERIFIED"
+        assert reqs[req_id]["status"] == "PASS"
 
     assert data["summary"]["verified_count"] == 8
     assert data["summary"]["failed_count"] == 0

@@ -169,23 +169,25 @@ def test_multi_run_shard_combining_and_stage_consolidation(pytester: pytest.Pyte
     json_data = json.loads(json_out.read_text(encoding="utf-8"))
     reqs = {r["req_id"]: r for r in json_data["requirements"]}
 
-    # REQ-001 passed in unit, failed in system -> overall consolidated status FAILED
-    assert reqs["REQ-001"]["status"] == "FAILED"
-    assert reqs["REQ-001"]["stages_verified"] == {"unit": "VERIFIED", "system": "FAILED"}
+    # REQ-001 passed in unit, failed in system -> overall consolidated status PARTIAL
+    assert reqs["REQ-001"]["status"] == "PARTIAL"
+    assert reqs["REQ-001"]["stages_verified"] == {"unit": "PASS", "system": "FAIL"}
     assert len(reqs["REQ-001"]["failure_messages"]) == 1
     assert "Puppy distracted by butterfly" in reqs["REQ-001"]["failure_messages"][0]
 
-    # REQ-002 passed in unit -> overall consolidated status VERIFIED
-    assert reqs["REQ-002"]["status"] == "VERIFIED"
-    assert reqs["REQ-002"]["stages_verified"] == {"unit": "VERIFIED"}
+    # REQ-002 passed in unit -> overall consolidated status PASS
+    assert reqs["REQ-002"]["status"] == "PASS"
+    assert reqs["REQ-002"]["stages_verified"] == {"unit": "PASS"}
 
-    # REQ-003 was in baseline but not executed in any stage -> UNVERIFIED
-    assert reqs["REQ-003"]["status"] == "UNVERIFIED"
+    # REQ-003 was in baseline but not executed in any stage -> FAIL
+    assert reqs["REQ-003"]["status"] == "FAIL"
 
-    # Summary metrics: 1 verified out of 3 baseline reqs = 33.33%
+    # Summary metrics: 1 pass out of 3 baseline reqs = 33.33%
     assert json_data["summary"]["total_baseline_requirements"] == 3
+    assert json_data["summary"]["passed_count"] == 1
     assert json_data["summary"]["verified_count"] == 1
     assert json_data["summary"]["failed_count"] == 1
+    assert json_data["summary"]["partial_count"] == 1
     assert json_data["summary"]["unverified_count"] == 1
     assert json_data["summary"]["coverage_percentage"] == pytest.approx(33.33, 0.1)
 
@@ -195,11 +197,11 @@ def test_multi_run_shard_combining_and_stage_consolidation(pytester: pytest.Pyte
         reader = list(csv.DictReader(f))
         assert len(reader) == 3
         csv_map = {row["req_id"]: row for row in reader}
-        assert csv_map["REQ-001"]["status"] == "FAILED"
-        assert "unit:VERIFIED" in csv_map["REQ-001"]["stages"]
-        assert "system:FAILED" in csv_map["REQ-001"]["stages"]
-        assert csv_map["REQ-002"]["status"] == "VERIFIED"
-        assert csv_map["REQ-003"]["status"] == "UNVERIFIED"
+        assert csv_map["REQ-001"]["status"] == "PARTIAL"
+        assert "unit:PASS" in csv_map["REQ-001"]["stages"]
+        assert "system:FAIL" in csv_map["REQ-001"]["stages"]
+        assert csv_map["REQ-002"]["status"] == "PASS"
+        assert csv_map["REQ-003"]["status"] == "FAIL"
 
     # Verify Markdown output
     assert md_out.is_file()
@@ -215,7 +217,7 @@ def test_multi_run_shard_combining_and_stage_consolidation(pytester: pytest.Pyte
     assert "<!DOCTYPE html>" in html_content
     assert "Requirements Traceability Matrix" in html_content
     assert "REQ-001" in html_content
-    assert "status-failed" in html_content
+    assert "status-fail" in html_content
     assert "searchInput" in html_content
 
 
@@ -331,7 +333,7 @@ def test_cli_direct_subcommand_invocation(pytester: pytest.Pytester) -> None:
     )
     assert res.returncode == 0
     assert "Requirements Traceability Matrix" in res.stdout
-    assert "Verified: 1" in res.stdout
+    assert "Pass: 1" in res.stdout
 
 
 def test_console_summary_color_and_partial(pytester: pytest.Pytester) -> None:
@@ -384,10 +386,10 @@ def test_console_summary_color_and_partial(pytester: pytest.Pytester) -> None:
     result.stdout.fnmatch_lines(
         [
             "*Requirements Traceability Matrix (RTM)*",
-            "*REQ-FAIL*FAILED*",
+            "*REQ-FAIL*FAIL*",
             "*REQ-PART*PARTIAL*",
-            "*REQ-PASS*VERIFIED*",
-            "*Total: 3*Verified: 2*",
+            "*REQ-PASS*PASS*",
+            "*Total: 3*Pass: 1*Fail: 1*Partial: 1*",
         ]
     )
 
@@ -546,9 +548,61 @@ def test_html_partial_filter_and_markdown_table_escaping(tmp_path: Path) -> None
 
     html_out = generate_html_report(report)
     assert 'data-filter="partial">Partial (1)</button>' in html_out
-    assert "status === 'verified' || status === 'partial'" in html_out
+    assert "matchesFilter = (status === currentFilter);" in html_out
     assert 'data-status="partial"' in html_out
 
     md_out = generate_markdown_report(report)
     assert r"Must handle A \| B and second line" in md_out
     assert r"Step with \| pipe and newline" in md_out
+
+
+def test_one_pass_one_fail_same_requirement_gives_partial(pytester: pytest.Pytester) -> None:
+    """Verify that when two tests verify the same requirement, one passing and one failing,
+    the overall consolidated requirement status is PARTIAL rather than FAIL.
+    """
+    baseline_file = pytester.path / "baseline.json"
+    baseline_file.write_text(
+        json.dumps(
+            {
+                "requirements": [
+                    {"id": "REQ-SAME", "text": "Requirement verified by multiple tests"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    pytester.makepyfile(
+        """
+        from pytest_verifies import verifies
+
+        def test_same_pass():
+            with verifies("REQ-SAME"):
+                assert True
+
+        def test_same_fail():
+            with verifies("REQ-SAME"):
+                assert False, "Something broke"
+        """
+    )
+
+    json_out = pytester.path / "rtm.json"
+    result = pytester.runpytest(
+        f"--verifies-baseline={baseline_file}",
+        f"--verifies-json={json_out}",
+    )
+    result.assert_outcomes(passed=1, failed=1)
+
+    assert json_out.is_file()
+    data = json.loads(json_out.read_text(encoding="utf-8"))
+    req = data["requirements"][0]
+    assert req["req_id"] == "REQ-SAME"
+    assert req["status"] == "PARTIAL"
+    assert len(req["failure_messages"]) == 1
+    assert "Something broke" in req["failure_messages"][0]
+    assert len(req["verified_by_tests"]) == 1
+
+    summary = data["summary"]
+    assert summary["partial_count"] == 1
+    assert summary["failed_count"] == 0
+    assert summary["passed_count"] == 0

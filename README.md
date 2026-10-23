@@ -245,22 +245,23 @@ uv run pytest-verifies combine .verifies/ \
 
 ### Interactive HTML5 Report
 Self-contained, responsive, single-file HTML5 document with zero external network dependencies:
-- **Metric Cards:** Total Requirements, Verified %, Failed %, Unverified %, Orphan Count.
-- **Dynamic Filtering:** Instant filtering by status (`All`, `Verified`, `Failed`, `Unverified`, `Orphans`).
+- **Metric Cards:** Total Requirements, Pass %, Fail %, Partial %, Orphan Count.
+- **Dynamic Filtering:** Instant filtering by status (`All`, `Pass`, `Partial`, `Fail`, `Orphans`).
 - **Live Search:** Fast search by Requirement ID, title, test nodeid, or file location.
 - **Diagnostic Expansion:** Interactive `<details>` sections displaying execution trace, attached objective evidence, and failure tracebacks.
 
 ### GitHub / GitLab Markdown Summary
 Designed directly for `$GITHUB_STEP_SUMMARY` and merge request comments:
-- Summary Scorecard Table with clean status indicators (`VERIFIED`, `FAILED`, `PARTIAL`, `UNVERIFIED`, `[ORPHAN]`).
-- Requirements Traceability Table detailing stage coverage and verification tests.
+- Summary Scorecard Table with clean status indicators (`PASS`, `FAIL`, `PARTIAL`, `[ORPHAN]`).
+- Requirements Traceability Table detailing stage coverage (when stages are configured) and verification tests.
 - Collapsible diagnostics with assertion tracebacks and formatted JSON evidence.
 
 ### Tabular CSV Export
 Standardised format for enterprise PLM / ALM tools (e.g. Jira, Jama, Polarion):
 ```csv
-req_id,title,status,in_baseline,stages,verified_by_tests,evidence,failure_messages
+req_id,text,status,in_baseline,stages,tests,evidence,failure_messages
 ```
+*(The `stages` column is dynamically included only when execution stages are configured).*
 
 ---
 

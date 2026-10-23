@@ -22,4 +22,4 @@ Each verification record captured by `pytest-verifies` includes:
 * **Source Traceability:** Relative file path and exact line number of the verification block (`tests/test_pwr.py:42`).
 * **Environmental Fingerprint:** Execution run ID, Git commit SHA, Git dirty state, hostname, timestamp (ISO-8601 UTC), Python version, and Pytest version.
 * **Objective Telemetry:** Structured JSON data attached during test execution (`evidence={...}`).
-* **Deterministic Status:** Unambiguous `VERIFIED`, `PARTIAL`, or `FAILED` classification.
+* **Deterministic Status:** Unambiguous `PASS`, `PARTIAL`, or `FAIL` classification.

@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Action step telemetry and status tracking in consolidated RTM artefacts and reports.
 
 ### Changed
+- Changed status nomenclature from `VERIFIED` and `UNVERIFIED` to `PASS` and `FAIL` across data models, console output, and all exported report formats (HTML, Markdown, CSV, JSON).
+- Fixed console summary table column alignment when displaying orphaned requirements (`[ORPHAN]`).
+- Conditionally omit the `Stages` column across all RTM report formats unless execution stages are explicitly configured.
+- Improved partial verification resolution: when multiple tests verify the same requirement and yield mixed outcomes (e.g. one pass and one fail), the requirement now resolves to `PARTIAL` rather than unconditionally falling back to `FAIL`.
 - Simplified baseline requirement manifest schema to `id` and requirement `text`/`description`.
 - Hardened lifecycle hooks and test execution teardown handling.
 - Enhanced static typing across all plugin modules and integrated `types-pyyaml` stubs.
