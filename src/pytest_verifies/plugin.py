@@ -340,7 +340,7 @@ def pytest_configure(config: pytest.Config) -> None:
     """Register custom marker, load baseline manifest, and register controller listener."""
     config.addinivalue_line(
         "markers",
-        "verifies(*req_ids, step=None, step_id=None, description=None, evidence=None): "
+        "verifies(*req_ids, step_id=None, description=None, evidence=None): "
         "Link test to formal engineering requirements or procedure steps.",
     )
 
@@ -601,7 +601,7 @@ def pytest_runtest_makereport(
             )
             desc = marker.kwargs.get("description")
             ev = marker.kwargs.get("evidence")
-            step_id = marker.kwargs.get("step_id") or marker.kwargs.get("step")
+            step_id = marker.kwargs.get("step_id")
 
             if not marker_req_ids and step_id:
                 m_record = VerificationRecord(

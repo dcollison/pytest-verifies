@@ -1,6 +1,6 @@
 # pytest-verifies
 
-[![CI](https://img.shields.io/badge/pytest--verifies-v1.1.1-blue.svg)](https://github.com/dcollison/pytest-verifies)
+[![CI](https://img.shields.io/badge/pytest--verifies-v1.1.2-blue.svg)](https://github.com/dcollison/pytest-verifies)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Standards](https://img.shields.io/badge/compliance-ISO%2026262%20%7C%20IEC%2062304%20%7C%20DO--178C%20%7C%20SOC2-orange.svg)](#standards-compliance)
@@ -143,8 +143,10 @@ def test_puppy_training_routine():
         puppy["tricks"].append("sit")
         assert "sit" in puppy["tricks"]
 
-    # Verification step with verifies(..., step=...)
-    with verifies("REQ-DOG-002", step="STEP-03", description="Verify puppy wags tail after treat"):
+    # Verification step with verifies(..., step_id=...)
+    with verifies(
+        "REQ-DOG-002", step_id="STEP-03", description="Verify puppy wags tail after treat"
+    ):
         tail_wagging = True
         assert tail_wagging is True
 ```
