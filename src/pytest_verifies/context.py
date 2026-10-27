@@ -63,7 +63,6 @@ class _VerifiesContext(collections.abc.Collection[pytest.MarkDecorator]):
     def __init__(
         self,
         *req_ids: str | Iterable[str],
-        step: str | None = None,
         step_id: str | None = None,
         description: str | None = None,
         soft: bool = False,
@@ -72,9 +71,8 @@ class _VerifiesContext(collections.abc.Collection[pytest.MarkDecorator]):
         """Initialise verification context with requirement identifiers, step ID, and optional metadata."""
         flattened = flatten_req_ids(*req_ids)
 
-        raw_step = step_id if step_id is not None else step
         cleaned_step = (
-            str(raw_step).strip() if raw_step is not None and str(raw_step).strip() else None
+            str(step_id).strip() if step_id is not None and str(step_id).strip() else None
         )
 
         if not flattened and cleaned_step is None:
@@ -88,16 +86,6 @@ class _VerifiesContext(collections.abc.Collection[pytest.MarkDecorator]):
         self._evidence_stack: list[Any] = []
         self.location: str = ""
         self._start_time: float = 0.0
-
-    @property
-    def step(self) -> str | None:
-        """Return the current step identifier."""
-        return self.step_id
-
-    @step.setter
-    def step(self, value: str | None) -> None:
-        """Set the step identifier."""
-        self.step_id = str(value).strip() if value is not None and str(value).strip() else None
 
     @property
     def mark_decorator(self) -> pytest.MarkDecorator:
@@ -262,7 +250,6 @@ class _VerifiesContext(collections.abc.Collection[pytest.MarkDecorator]):
 
 def verifies(
     *req_ids: str | Iterable[str],
-    step: str | None = None,
     step_id: str | None = None,
     description: str | None = None,
     soft: bool = False,
@@ -272,8 +259,7 @@ def verifies(
 
     Args:
         *req_ids: One or more requirement identifiers (e.g. "REQ-001", "REQ-002").
-        step: Optional step identifier (e.g. "STEP-01").
-        step_id: Alias for step.
+        step_id: Optional step identifier (e.g. "STEP-01").
         description: Optional human-readable requirement description.
         soft: If True, assertion failures are logged without terminating the test function.
         evidence: Optional arbitrary data (dict, string, etc.) representing verification evidence.
@@ -283,7 +269,6 @@ def verifies(
     """
     return _VerifiesContext(
         *req_ids,
-        step=step,
         step_id=step_id,
         description=description,
         soft=soft,

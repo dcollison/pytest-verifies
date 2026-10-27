@@ -137,8 +137,10 @@ def test_puppy_training_routine():
     ):
         assert "sit" in puppy["tricks"]
 
-    # 4. Verification Step using verifies(..., step=...)
-    with verifies("REQ-DOG-002", step="STEP-04", description="Verify puppy wags tail when praised"):
+    # 4. Verification Step using verifies(..., step_id=...)
+    with verifies(
+        "REQ-DOG-002", step_id="STEP-04", description="Verify puppy wags tail when praised"
+    ):
         puppy_happy = True
         assert puppy_happy is True
 ```

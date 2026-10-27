@@ -25,8 +25,8 @@ def test_step_action_and_verification_context(pytester: pytest.Pytester) -> None
             with step("STEP-02", description="Verify puppy comes when called", verifies="REQ-DOG-001"):
                 assert 200 == 200
 
-            # 3. Verification step using verifies(..., step=...)
-            with verifies("REQ-DOG-002", step="STEP-03", description="Verify puppy wags tail"):
+            # 3. Verification step using verifies(..., step_id=...)
+            with verifies("REQ-DOG-002", step_id="STEP-03", description="Verify puppy wags tail"):
                 tail_wag_speed = 50
                 assert tail_wag_speed > 0
         """
