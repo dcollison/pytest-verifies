@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import Sequence
+from collections.abc import Sequence
 
 from pytest_verifies.baseline import load_baseline
 from pytest_verifies.models import BaselineRequirement, RTMReport

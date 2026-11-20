@@ -11,10 +11,11 @@ import collections.abc
 import copy
 import inspect
 import time
+from collections.abc import Generator, Iterable
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Generator, Iterable
+from typing import Any
 
 import pytest
 
