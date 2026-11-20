@@ -10,10 +10,11 @@ import ast
 import fnmatch
 import inspect
 import textwrap
+from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Generator, Iterator
+from typing import Any
 
 import pytest
 
